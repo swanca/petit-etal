@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Petit Étal",
+    "slug": "etal",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "etal",
+    "android": {
+      "package": "fr.petitetal.jeu",
+      "versionCode": 1,
+      "predictiveBackGestureEnabled": false
+    },
+    "ios": { "supportsTablet": false, "bundleIdentifier": "fr.petitetal.jeu" },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "single",
+      "name": "Petit Étal",
+      "shortName": "Petit Étal",
+      "lang": "fr",
+      "themeColor": "#E23D32",
+      "backgroundColor": "#FFF8F3"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-asset",
+      ["expo-audio", { "microphonePermission": false }],
+      "./plugins/withReleaseSigning",
+      "./plugins/withAbiSplits"
+    ]
+  }
+}
