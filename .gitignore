@@ -9,3 +9,5 @@ expo-env.d.ts
 .env
 *.jks
 *.keystore
+apk/
+/android

@@ -1,6 +1,6 @@
 // Service worker de Petit Étal : rend le jeu installable et jouable hors connexion.
 // Réseau d'abord (les mises à jour arrivent dès qu'on est en ligne), cache en secours.
-const CACHE = 'etal-v1';
+const CACHE = 'etal-v2';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {
@@ -14,7 +14,9 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  const url = new URL(req.url);
+  // L'APK (plusieurs dizaines de Mo) ne passe pas par le cache.
+  if (req.method !== 'GET' || url.origin !== self.location.origin || url.pathname.endsWith('.apk')) return;
   e.respondWith(
     fetch(req)
       .then((res) => {

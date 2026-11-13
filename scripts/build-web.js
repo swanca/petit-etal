@@ -46,6 +46,13 @@ html = html.replace(/<html lang="[^"]*">/, '<html lang="fr">');
 fs.writeFileSync(indexPath, html);
 fs.writeFileSync(path.join(dist, '404.html'), html); // GitHub Pages : toute adresse inconnue retombe sur le jeu
 fs.writeFileSync(path.join(dist, '.nojekyll'), ''); // sans ça, GitHub Pages ignore les dossiers commençant par « _ »
+// Appli Android téléchargeable depuis le site (bouton « Télécharger l'APK »), si build-android.bat l'a produite.
+// On publie la version arm64 (tous les téléphones récents) : l'universelle dépasse vite la limite de 100 Mo de GitHub.
+const apk = ['petit-etal-arm64.apk', 'petit-etal.apk'].map((f) => path.join(root, 'apk', f)).find((f) => fs.existsSync(f) && fs.statSync(f).size < 95e6);
+if (apk) {
+  fs.copyFileSync(apk, path.join(dist, 'petit-etal.apk'));
+  console.log(`APK publié : petit-etal.apk (${(fs.statSync(apk).size / 1e6).toFixed(1)} Mo, depuis ${path.basename(apk)})`);
+} else console.warn('Pas d’APK dans apk/ : le bouton « Télécharger l’APK » donnera une erreur 404. Lance build-android.bat apk.');
 
 const size = (dir) => fs.readdirSync(dir, { withFileTypes: true }).reduce((a, e) => a + (e.isDirectory() ? size(path.join(dir, e.name)) : fs.statSync(path.join(dir, e.name)).size), 0);
 console.log(`\nOK : dist/ prêt (${(size(dist) / 1e6).toFixed(1)} Mo), chemin de base « ${baseUrl || '/'} ».`);

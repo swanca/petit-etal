@@ -6,6 +6,7 @@ export const IMG = {
   'baguette_bread': require('../../assets/items/baguette_bread.png'),
   'balloon': require('../../assets/items/balloon.png'),
   'basket': require('../../assets/items/basket.png'),
+  'battery': require('../../assets/items/battery.png'),
   'bell': require('../../assets/items/bell.png'),
   'bicycle': require('../../assets/items/bicycle.png'),
   'birthday_cake': require('../../assets/items/birthday_cake.png'),

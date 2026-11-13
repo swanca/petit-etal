@@ -7,10 +7,10 @@ import * as E from '../game/engine';
 import type { Offline, State } from '../game/engine';
 import type { LevelUp, Reward } from './Game';
 import { ImgName } from './images';
-import { canFullscreen, canPromptInstall, isInstalled, isIOS, isWeb, promptInstall, toggleFullscreen } from './install';
+import { canFullscreen, isInstalled, isWeb, toggleFullscreen } from './install';
 import { Btn, C, F, fmt, fmtDuration, fmtRate, Icon, NATIVE, T } from './theme';
 
-function Sheet({ title, icon, onClose, children }: { title: string; icon: ImgName; onClose: () => void; children: ReactNode }) {
+export function Sheet({ title, icon, onClose, children }: { title: string; icon: ImgName; onClose: () => void; children: ReactNode }) {
   const a = useState(() => new Animated.Value(0))[0];
   useEffect(() => {
     Animated.spring(a, { toValue: 1, friction: 9, tension: 90, useNativeDriver: NATIVE }).start();
@@ -65,7 +65,6 @@ function Row({ img, bg, title, desc, level, cost, coins, maxed, onBuy }: { img: 
 }
 
 const pct = (x: number) => `${Math.round(x * 100)} %`;
-const secs = (ms: number) => `${(ms / 1000).toFixed(1).replace('.', ',')} s`;
 
 export function UpgradesSheet({ s, onClose, onBuy, onBuyGen, onPrestige }: { s: State; onClose: () => void; onBuy: (u: UpgradeId) => void; onBuyGen: (c: ChainId) => void; onPrestige: () => void }) {
   const [confirm, setConfirm] = useState(false);
@@ -93,9 +92,10 @@ export function UpgradesSheet({ s, onClose, onBuy, onBuyGen, onPrestige }: { s: 
         const maxed = g.level >= B.GEN_MAX_LEVEL;
         const odds = B.genTierOdds(g.level + (maxed ? 0 : 1));
         const better = odds.p2 + odds.p3 + odds.p4;
+        const now = B.genTierOdds(g.level);
         const desc = maxed
-          ? `Une charge toutes les ${secs(B.genPeriodMs(g.level))}`
-          : `Charge : ${secs(B.genPeriodMs(g.level))} → ${secs(B.genPeriodMs(g.level + 1))} · ${pct(better)} d'objets déjà fusionnés`;
+          ? `${pct(now.p2 + now.p3 + now.p4)} des objets sortent déjà fusionnés`
+          : `Objets déjà fusionnés : ${pct(now.p2 + now.p3 + now.p4)} → ${pct(better)}`;
         return <Row key={c} img={def.maker as ImgName} bg={def.soft} title={def.name} desc={desc} level={g.level} cost={B.genCost(c, g.level)} coins={s.coins} maxed={maxed} onBuy={() => onBuyGen(c)} />;
       })}
       <T style={{ fontFamily: F.semi, fontSize: 13, color: C.inkSoft, marginLeft: 4, marginTop: 6 }}>MARCHÉ</T>
@@ -199,7 +199,7 @@ function Toggle({ label, icon, value, onChange }: { label: string; icon: ImgName
   );
 }
 
-export function SettingsSheet({ s, onClose, onSound, onMusic, onReset }: { s: State; onClose: () => void; onSound: (v: boolean) => void; onMusic: (v: boolean) => void; onReset: () => void }) {
+export function SettingsSheet({ s, onClose, onSound, onMusic, onInstall, onReset }: { s: State; onClose: () => void; onSound: (v: boolean) => void; onMusic: (v: boolean) => void; onInstall: () => void; onReset: () => void }) {
   const [confirm, setConfirm] = useState(false);
   return (
     <Sheet title="Réglages" icon="gear" onClose={onClose}>
@@ -210,14 +210,11 @@ export function SettingsSheet({ s, onClose, onSound, onMusic, onReset }: { s: St
           <T style={{ fontFamily: F.semi, fontSize: 15 }}>Jouer comme une appli</T>
           {isInstalled() ? (
             <T style={{ fontSize: 13, color: C.inkSoft }}>Petit Étal est installé sur cet appareil.</T>
-          ) : canPromptInstall() ? (
-            <Btn label="Installer sur l'écran d'accueil" small icon="mobile_phone" onPress={promptInstall} />
           ) : (
-            <T style={{ fontSize: 13, color: C.inkSoft }}>
-              {isIOS()
-                ? 'Sur iPhone : touche le bouton Partager de Safari, puis « Sur l’écran d’accueil ». Le jeu s’ouvrira en plein écran, comme une appli.'
-                : 'Ouvre le menu du navigateur (les trois points), puis « Installer l’application » ou « Ajouter à l’écran d’accueil ». Le jeu s’ouvrira en plein écran, comme une appli.'}
-            </T>
+            <>
+              <T style={{ fontSize: 13, color: C.inkSoft }}>Ajoute le jeu à ton écran d’accueil : il s’ouvre en plein écran, même sans connexion.</T>
+              <Btn label="Installer le jeu" small icon="mobile_phone" onPress={onInstall} />
+            </>
           )}
           {canFullscreen() && !isInstalled() ? <Btn label="Plein écran" small color="#3B8FD9" dark="#2A6FB0" onPress={toggleFullscreen} /> : null}
         </View>

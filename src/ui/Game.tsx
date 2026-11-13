@@ -9,12 +9,15 @@ import type { Ev, Offline, Order, State } from '../game/engine';
 import { useGame } from '../game/useGame';
 import { Board, BoardHandle } from './Board';
 import { ImgName } from './images';
+import { initAds } from './ads';
+import { InstallBanner, InstallSheet } from './InstallSheet';
+import { ShopSheet } from './ShopSheet';
 import { BossIntroModal, CollectionSheet, DailyModal, LevelUpModal, MissionsSheet, OfflineModal, RewardModal, SettingsSheet, TrophiesSheet, UpgradesSheet } from './Sheets';
 import { buzz, pauseMusic, play, playMerge, setMusic, setSoundEnabled, startAudio } from './sfx';
 import { Btn, C, F, fmt, fmtClock, fmtRate, Icon, NATIVE, T } from './theme';
 
 const MAX_W = 460;
-type SheetName = 'upgrades' | 'collection' | 'settings' | 'missions' | 'trophies' | null;
+type SheetName = 'upgrades' | 'collection' | 'settings' | 'missions' | 'trophies' | 'install' | 'shop' | null;
 export type LevelUp = { level: number; coins: number; unlocked: ChainId | null };
 export type Reward = { img: ImgName; title: string; text: string; coins: number; stars?: number };
 type Rect = { x: number; y: number; w: number; h: number };
@@ -147,41 +150,145 @@ const Awning = memo(function Awning({ width }: { width: number }) {
 
 const pill = { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, backgroundColor: C.card, borderRadius: 16, borderWidth: 2, borderColor: C.line, paddingVertical: 4, paddingHorizontal: 8, gap: 6 };
 
-const Header = memo(function Header({ level, stars, coins, rate, ribbons, boosted }: { level: number; stars: number; coins: number; rate: number; ribbons: number; boosted: boolean }) {
+/** Compte à rebours court « 0:42 » pour l'énergie. */
+const clock = (ms: number) => {
+  const sec = Math.ceil(ms / 1000);
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+};
+
+const Header = memo(function Header({
+  level,
+  stars,
+  coins,
+  rate,
+  ribbons,
+  boosted,
+  energy,
+  energyMax,
+  nextIn,
+  free,
+  coinRef,
+  bump,
+  onEnergy,
+}: {
+  level: number;
+  stars: number;
+  coins: number;
+  rate: number;
+  ribbons: number;
+  boosted: boolean;
+  energy: number;
+  energyMax: number;
+  nextIn: number;
+  free: boolean;
+  coinRef: { current: ViewRef | null };
+  bump: Animated.Value;
+  onEnergy: () => void;
+}) {
   const need = B.starsForLevel(level);
+  const empty = energy < 1 && !free;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingTop: 5, paddingBottom: 5, gap: 8 }}>
-      <View style={pill}>
-        <Icon name="star" size={26} />
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingTop: 5, paddingBottom: 5, gap: 6 }}>
+      <View style={[pill, { gap: 4, paddingHorizontal: 6 }]}>
+        <View style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="star" size={28} />
+          <T style={{ position: 'absolute', fontFamily: F.title, fontSize: 11, lineHeight: 13, color: C.ink, top: 9 }}>{level}</T>
+        </View>
         <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <T style={{ fontFamily: F.title, fontSize: 14, lineHeight: 17 }}>Niveau {level}</T>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+            <T style={{ fontFamily: F.title, fontSize: 13, lineHeight: 16 }}>Niv. {level}</T>
             {ribbons > 0 ? (
               <>
-                <Icon name="rosette" size={13} />
-                <T style={{ fontFamily: F.semi, fontSize: 11, lineHeight: 14, color: C.redDark }}>{ribbons}</T>
+                <Icon name="rosette" size={12} />
+                <T style={{ fontFamily: F.semi, fontSize: 10, lineHeight: 13, color: C.redDark }}>{ribbons}</T>
               </>
             ) : null}
           </View>
-          <View style={{ height: 8, borderRadius: 4, backgroundColor: C.line, overflow: 'hidden', marginTop: 2 }}>
-            <View style={{ height: 8, borderRadius: 4, backgroundColor: C.gold, width: `${Math.min(100, (stars / need) * 100)}%` }} />
+          <View style={{ height: 7, borderRadius: 4, backgroundColor: C.line, overflow: 'hidden', marginTop: 2 }}>
+            <View style={{ height: 7, borderRadius: 4, backgroundColor: C.gold, width: `${Math.min(100, (stars / need) * 100)}%` }} />
           </View>
+          <T style={{ fontSize: 9.5, lineHeight: 12, color: C.inkSoft }}>
+            {stars}/{need} étoiles
+          </T>
         </View>
-        <T style={{ fontSize: 11, color: C.inkSoft }}>
-          {stars}/{need}
-        </T>
       </View>
-      <View style={pill}>
-        <Icon name="coin" size={26} />
+      <Pressable onPress={onEnergy} style={[pill, { gap: 4, paddingHorizontal: 6, borderColor: empty ? C.red : free ? '#E0A800' : C.line }]}>
+        <Icon name="high_voltage" size={26} />
         <View style={{ flex: 1 }}>
-          <T style={{ fontFamily: F.title, fontSize: 17, lineHeight: 19 }} numberOfLines={1}>
+          <T style={{ fontFamily: F.title, fontSize: 16, lineHeight: 19, color: empty ? C.red : C.ink }} numberOfLines={1}>
+            {energy}
+            <T style={{ fontFamily: F.semi, fontSize: 11, color: C.inkSoft }}>/{energyMax}</T>
+          </T>
+          <T style={{ fontSize: 10.5, lineHeight: 13, color: free ? '#B88A00' : C.inkSoft }} numberOfLines={1}>
+            {free ? 'gratuit !' : nextIn > 0 ? `+1 · ${clock(nextIn)}` : 'plein'}
+          </T>
+        </View>
+        <View style={{ width: 17, height: 17, borderRadius: 9, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderBottomColor: C.greenDark }}>
+          <T style={{ fontFamily: F.title, color: C.white, fontSize: 13, lineHeight: 15 }}>+</T>
+        </View>
+      </Pressable>
+      <Animated.View style={[pill, { gap: 4, paddingHorizontal: 6, transform: [{ scale: bump.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }) }] }]}>
+        <View ref={coinRef}>
+          <Icon name="coin" size={26} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <T style={{ fontFamily: F.title, fontSize: 16, lineHeight: 19 }} numberOfLines={1}>
             {fmt(coins)}
           </T>
-          <T style={{ fontSize: 11, lineHeight: 13, color: boosted ? '#E8612D' : C.greenDark }} numberOfLines={1}>
-            +{fmtRate(rate)} / s{boosted ? ' ×2' : ''}
+          <T style={{ fontSize: 10.5, lineHeight: 13, color: boosted ? '#E8612D' : C.greenDark }} numberOfLines={1}>
+            +{fmtRate(rate)}/s{boosted ? ' ×2' : ''}
           </T>
         </View>
-      </View>
+      </Animated.View>
+    </View>
+  );
+});
+
+// ---------- Pièces qui volent vers le compteur ----------
+
+type CoinFly = { id: number; x: number; y: number; tx: number; ty: number; n: number };
+
+function FlyingCoin({ f, i, onArrive }: { f: CoinFly; i: number; onArrive: (last: boolean) => void }) {
+  const [t] = useState(() => new Animated.Value(0));
+  // Chaque pièce jaillit un peu de côté avant de filer vers le compteur.
+  const [spread] = useState(() => {
+    const ang = (i / f.n) * Math.PI * 2 + Math.random() * 0.6;
+    const r = 22 + Math.random() * 22;
+    return { dx: Math.cos(ang) * r, dy: Math.sin(ang) * r - 10 };
+  });
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(i * 55),
+      Animated.timing(t, { toValue: 1, duration: 720, easing: Easing.inOut(Easing.cubic), useNativeDriver: NATIVE }),
+    ]).start(() => onArrive(i === f.n - 1));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const x = t.interpolate({ inputRange: [0, 0.28, 1], outputRange: [0, spread.dx, f.tx - f.x] });
+  const y = t.interpolate({ inputRange: [0, 0.28, 1], outputRange: [0, spread.dy, f.ty - f.y] });
+  const scale = t.interpolate({ inputRange: [0, 0.15, 0.28, 1], outputRange: [0.3, 1.15, 1, 0.75] });
+  return (
+    <Animated.View pointerEvents="none" style={{ position: 'absolute', left: f.x - 13, top: f.y - 13, transform: [{ translateX: x }, { translateY: y }, { scale }] }}>
+      <Icon name="coin" size={26} />
+    </Animated.View>
+  );
+}
+
+const CoinLayer = memo(function CoinLayer({ flies, onArrive, onDone }: { flies: CoinFly[]; onArrive: () => void; onDone: (id: number) => void }) {
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 50 }}>
+      {flies.map((f) =>
+        Array.from({ length: f.n }, (_, i) => (
+          <FlyingCoin
+            key={`${f.id}-${i}`}
+            f={f}
+            i={i}
+            onArrive={(last) => {
+              onArrive();
+              if (last) onDone(f.id);
+            }}
+          />
+        )),
+      )}
     </View>
   );
 });
@@ -310,7 +417,6 @@ function Chip({ img, label, color, state, onPress, pulse }: { img: ImgName; labe
 function GenButton({ chain, s, pulse, fast, onTap }: { chain: ChainId; s: State; pulse: boolean; fast: boolean; onTap: (c: ChainId, pageX: number, pageY: number) => void }) {
   const def = B.CHAINS[chain];
   const g = s.gens[chain];
-  const cap = B.genCap(s.up.cap);
   const bounce = useState(() => new Animated.Value(1))[0];
   if (!E.chainUnlocked(s, chain)) {
     return (
@@ -320,8 +426,8 @@ function GenButton({ chain, s, pulse, fast, onTap }: { chain: ChainId; s: State;
       </View>
     );
   }
-  const full = g.charges >= cap;
-  const prog = full ? 1 : g.prog / B.genPeriodMs(g.level);
+  // « fast » : Panier gratuit actif, les stands ne coûtent rien.
+  const can = fast || s.energy >= 1;
   return (
     <Pressable
       style={{ flex: 1 }}
@@ -331,16 +437,15 @@ function GenButton({ chain, s, pulse, fast, onTap }: { chain: ChainId; s: State;
         onTap(chain, e.nativeEvent.pageX, e.nativeEvent.pageY);
       }}>
       {pulse ? <Pulse radius={16} /> : null}
-      <Animated.View style={{ height: 68, borderRadius: 14, backgroundColor: def.color, paddingBottom: 4, transform: [{ scale: bounce }], opacity: g.charges > 0 ? 1 : 0.6 }}>
-        <View style={{ flex: 1, borderRadius: 14, backgroundColor: def.soft, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: def.color }}>
-          <Icon name={def.maker as ImgName} size={32} />
-          <View style={{ width: '74%', height: 5, borderRadius: 3, backgroundColor: 'rgba(74,47,27,0.15)', overflow: 'hidden', marginTop: 2 }}>
-            <View style={{ height: 5, borderRadius: 3, backgroundColor: fast ? '#E0A800' : def.color, width: `${Math.round(prog * 100)}%` }} />
-          </View>
+      <Animated.View style={{ height: 68, borderRadius: 14, backgroundColor: def.color, paddingBottom: 4, transform: [{ scale: bounce }], opacity: can ? 1 : 0.55 }}>
+        <View style={{ flex: 1, borderRadius: 14, backgroundColor: def.soft, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: fast ? '#E0A800' : def.color }}>
+          <Icon name={def.maker as ImgName} size={34} />
+          <T style={{ fontFamily: F.semi, fontSize: 9.5, lineHeight: 11, color: C.inkSoft }}>niv. {g.level}</T>
         </View>
       </Animated.View>
-      <View style={{ position: 'absolute', right: -3, top: -6, minWidth: 22, paddingHorizontal: 4, height: 18, borderRadius: 9, backgroundColor: g.charges > 0 ? def.color : C.greyDark, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.white }}>
-        <T style={{ fontFamily: F.title, fontSize: 10.5, lineHeight: 13, color: C.white }}>{g.charges}</T>
+      <View style={{ position: 'absolute', right: -3, top: -6, flexDirection: 'row', alignItems: 'center', paddingLeft: 2, paddingRight: 5, height: 18, borderRadius: 9, backgroundColor: fast ? '#E0A800' : can ? def.color : C.greyDark, borderWidth: 2, borderColor: C.white }}>
+        <Icon name="high_voltage" size={11} />
+        <T style={{ fontFamily: F.title, fontSize: 10, lineHeight: 13, color: C.white }}>{fast ? '0' : '1'}</T>
       </View>
     </Pressable>
   );
@@ -400,7 +505,41 @@ export function Game() {
 
   const width = Math.min(dims.width, MAX_W);
   // 434 : hauteur de tout ce qui n'est pas le plateau (bandeau, commandes, boosts, info, stands, barre du bas).
-  const cs = Math.max(34, Math.min(72, Math.floor(Math.min((width - 24) / B.COLS, (dims.height - 434) / B.ROWS))));
+  const [bannerH, setBannerH] = useState(0);
+  const coinRef = useRef<ViewRef>(null);
+  const coinRect = useRef<Rect>({ x: 0, y: 0, w: 0, h: 0 });
+  const [coinBump] = useState(() => new Animated.Value(0));
+  const [flies, setFlies] = useState<CoinFly[]>([]);
+  const flyId = useRef(0);
+  const flyCoins = useCallback((x: number, y: number, n: number) => {
+    measureRect(coinRef, coinRect);
+    const r = coinRect.current;
+    if (!r.w) return;
+    setFlies((l) => (l.length > 6 ? l : [...l, { id: flyId.current++, x, y, tx: r.x + r.w / 2, ty: r.y + r.h / 2, n }]));
+  }, []);
+  const onCoinArrive = useCallback(() => {
+    coinBump.stopAnimation();
+    coinBump.setValue(1);
+    Animated.spring(coinBump, { toValue: 0, friction: 4, tension: 200, useNativeDriver: NATIVE }).start();
+  }, [coinBump]);
+  const onFlyDone = useCallback((id: number) => setFlies((l) => l.filter((f) => f.id !== id)), []);
+  const fromCell = useCallback(
+    (cell: number, n: number) => {
+      const p = fx.current?.cellCenter(cell);
+      if (p) flyCoins(p.x, p.y, n);
+    },
+    [flyCoins],
+  );
+  const fromRect = useCallback(
+    (ref: { current: ViewRef | null }, n: number) => {
+      const rr = { current: { x: 0, y: 0, w: 0, h: 0 } };
+      measureRect(ref, rr);
+      if (rr.current.w) flyCoins(rr.current.x + rr.current.w / 2, rr.current.y + rr.current.h / 2, n);
+      else flyCoins(dims.width / 2, dims.height / 2, n);
+    },
+    [flyCoins, dims.width, dims.height],
+  );
+  const cs = Math.max(34, Math.min(72, Math.floor(Math.min((width - 24) / B.COLS, (dims.height - 434 - bannerH) / B.ROWS))));
 
   // Réglages son : appliqués dès le chargement, musique lancée au premier geste (règle des navigateurs).
   const soundOn = s?.sound ?? true;
@@ -415,6 +554,7 @@ export function Game() {
     if (!started.current) {
       started.current = true;
       startAudio();
+      initAds();
     }
     return false;
   }, []);
@@ -429,6 +569,7 @@ export function Game() {
           fx.current?.burst(ev.cell, undefined, B.CHAINS[ev.chain].color);
         } else if (ev.t === 'merge') {
           playMerge(ev.combo);
+          fromCell(ev.cell, ev.lucky ? 6 : 3);
           if (ev.lucky || ev.tier >= 7) play('rare');
           buzz('light');
           fx.current?.burst(ev.cell, ev.lucky ? `Fusion en or ! +${fmt(ev.coins)}` : ev.combo >= 1 ? `Combo ×${ev.combo + 1}  +${fmt(ev.coins)}` : `+${fmt(ev.coins)}`, ev.lucky ? C.gold : B.CHAINS[ev.chain].color, true);
@@ -438,9 +579,11 @@ export function Game() {
           say(`Nouveau : ${it.name} !  +${fmt(ev.coins)}`, it.img as ImgName);
         } else if (ev.t === 'sell') {
           play('coin');
+          fromCell(ev.cell, 4);
           fx.current?.burst(ev.cell, `+${fmt(ev.coins)}`, C.gold);
         } else if (ev.t === 'order') {
           play('order');
+          fromRect(topRef, 7);
           buzz('success');
           say(`Commande livrée !  +${fmt(ev.coins)}`, 'coin');
         } else if (ev.t === 'levelup') {
@@ -450,6 +593,7 @@ export function Game() {
           play('buy');
           buzz('success');
         } else if (ev.t === 'reward') {
+          if (ev.coins > 0) flyCoins(dims.width / 2, dims.height / 2, 8);
           play(ev.text === 'Coffre de palier' ? 'chest' : ev.text === 'Cadeau du jour' ? 'daily' : 'quest');
           say(ev.coins > 0 ? `${ev.text} !  +${fmt(ev.coins)}` : `${ev.text} !`, ev.text === 'Coffre de palier' ? 'wrapped_gift' : 'coin');
         } else if (ev.t === 'boost') {
@@ -464,6 +608,7 @@ export function Game() {
           fx.current?.burst(ev.cell, `-${fmt(ev.dmg)}`, C.red, true);
         } else if (ev.t === 'bossWin') {
           play('quest');
+          fromRect(topRef, 8);
           buzz('success');
           setReward({ img: B.bossOf(ev.level).img as ImgName, title: 'Glouton repoussé !', text: `${B.bossOf(ev.level).name} (niv. ${ev.level}) a pris la fuite. Le suivant sera plus coriace.`, coins: ev.coins, stars: ev.stars });
         } else if (ev.t === 'move') {
@@ -472,16 +617,23 @@ export function Game() {
           play('error');
           buzz('error');
           say("L'étal est plein : fusionne, livre ou vends.", 'package');
+        } else if (ev.t === 'noEnergy') {
+          play('error');
+          buzz('error');
+          setSheet('shop');
+        } else if (ev.t === 'energy') {
+          play('boost');
+          say(`${ev.text} : +${ev.amount} énergie`, 'high_voltage');
         } else if (ev.t === 'empty') {
           play('error');
-          say('Ce stand se recharge…', 'hourglass_done');
+          say('Il manque des objets pour cette commande.', 'hourglass_done');
         } else if (ev.t === 'poor') {
           play('poor');
           say('Pas assez de pièces.', 'coin');
         }
       }
     },
-    [say],
+    [say, fromCell, fromRect, flyCoins, dims.width, dims.height],
   );
   const run = useCallback((fn: (st: State, now: number) => E.Res) => react(act((st) => fn(st, Date.now()))), [act, react]);
 
@@ -606,7 +758,10 @@ export function Game() {
     <View style={{ flex: 1, backgroundColor: C.page, alignItems: 'center' }} onStartShouldSetResponderCapture={firstTouch}>
       <SafeAreaView style={{ flex: 1, width, backgroundColor: C.bg }} edges={['top', 'bottom']}>
         <Awning width={width} />
-        <Header level={s.level} stars={s.stars} coins={s.coins} rate={rate * (coinBoost ? B.BOOST_COIN_MULT : 1)} ribbons={s.ribbons} boosted={coinBoost} />
+        <View onLayout={(e) => setBannerH(Math.round(e.nativeEvent.layout.height))}>
+          <InstallBanner ready={tuto >= E.TUTO.upgrade} onOpen={() => setSheet('install')} />
+        </View>
+        <Header level={s.level} stars={s.stars} coins={s.coins} rate={rate * (coinBoost ? B.BOOST_COIN_MULT : 1)} ribbons={s.ribbons} boosted={coinBoost} coinRef={coinRef} bump={coinBump} energy={s.energy} energyMax={E.energyMax(s)} nextIn={E.energyNextIn(s)} free={E.boostActive(s, 'speed', now)} onEnergy={() => setSheet('shop')} />
 
         <View ref={topRef} style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 10, paddingTop: 3 }}>
           {fighting ? <BossPanel s={s} now={now} hitKey={hitKey} dragging={dragging} /> : s.orders.map((o, i) => <OrderCard key={i} slot={i} order={o.order} s={s} now={now} pulse={tuto === E.TUTO.deliver} onDeliver={onDeliver} onSkip={onSkip} />)}
@@ -729,12 +884,17 @@ export function Game() {
         {sheet === 'missions' ? <MissionsSheet s={s} now={now} onClose={() => setSheet(null)} onClaim={(id) => run((st) => E.claimMission(st, id))} onDaily={() => run((st, t) => E.claimDaily(st, t))} /> : null}
         {sheet === 'trophies' ? <TrophiesSheet s={s} onClose={() => setSheet(null)} onClaim={(id) => run((st) => E.claimTrophy(st, id))} /> : null}
         {sheet === 'collection' ? <CollectionSheet s={s} onClose={() => setSheet(null)} /> : null}
+        {sheet === 'install' ? <InstallSheet onClose={() => setSheet(null)} /> : null}
+        {sheet === 'shop' ? (
+          <ShopSheet s={s} now={now} onClose={() => setSheet(null)} onAd={(perDay) => run((st, t) => E.refillByAd(st, t, perDay))} onBuy={(kind) => run((st, t) => E.buyEnergy(st, t, kind))} />
+        ) : null}
         {sheet === 'settings' ? (
           <SettingsSheet
             s={s}
             onClose={() => setSheet(null)}
             onSound={(v) => patch({ sound: v })}
             onMusic={(v) => patch({ music: v })}
+            onInstall={() => setSheet('install')}
             onReset={() => {
               reset();
               setSheet(null);
@@ -777,6 +937,7 @@ export function Game() {
           />
         ) : null}
       </SafeAreaView>
+      <CoinLayer flies={flies} onArrive={onCoinArrive} onDone={onFlyDone} />
     </View>
   );
 }

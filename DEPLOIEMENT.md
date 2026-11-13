@@ -31,9 +31,17 @@ https://TON-COMPTE.github.io/petit-etal/
 
 ## 4. Installer sur le téléphone
 
-- **Android (Chrome)** : ouvrir le lien, menu ⋮ → **Installer l'application** (ou **Ajouter à l'écran d'accueil**).
-  Le bouton « Installer » est aussi dans Réglages (⚙) du jeu.
-- **iPhone (Safari)** : bouton Partager → **Sur l'écran d'accueil**.
+Le jeu affiche un bandeau **Installer** (et un bouton dans Réglages ⚙) qui donne le bon mode d'emploi selon le
+téléphone et le navigateur :
+
+- **Android (Chrome)** : installation en un toucher quand Chrome la propose, sinon menu ⋮ → **Installer l'application**.
+  Le panneau propose aussi **Télécharger l'APK** : la vraie appli, publiée à côté du site (`petit-etal.apk`).
+- **iPhone (Safari)** : bouton Partager → **Sur l'écran d'accueil** → **Ajouter**.
+- **Lien ouvert dans Messenger, Instagram, Discord…** : ces navigateurs intégrés ne savent pas installer ; le panneau
+  dit d'ouvrir le lien dans Chrome/Safari (bouton direct « Ouvrir dans Chrome » sur Android).
+
+Pour publier une nouvelle APK avec le site : `build-android.bat apk`, puis `node scripts/build-web.js petit-etal`
+(le script copie `apk/petit-etal-arm64.apk` dans `dist/petit-etal.apk`), puis la publication habituelle.
 
 Lancé depuis l'icône, le jeu s'ouvre en plein écran, sans barre de navigateur. La sauvegarde est sur l'appareil
 (stockage du navigateur) : désinstaller l'appli ou vider les données du site l'efface.
@@ -65,6 +73,35 @@ N'importe quel hébergeur de fichiers statiques convient (Netlify, Cloudflare Pa
 construire avec `node scripts/build-web.js /` et envoyer le contenu de `dist/`.
 
 ---
+
+# Énergie, pubs et achats
+
+Chaque objet sorti d'un stand coûte 1 énergie (+1 par minute, 30 au départ, « Grande réserve » l'agrandit).
+Les réglages sont dans `src/game/balance.ts` (bloc « Énergie »).
+
+## Activer les vraies pubs récompensées (site web)
+
+Tant qu'aucune régie n'est configurée, la boutique offre **2 pleins gratuits par jour**, présentés comme tels
+(jamais de fausse pub). Pour de vraies pubs (8 pleins par jour, rémunérés) :
+
+1. Créer un compte **Google AdSense** et demander l'accès aux **annonces pour jeux H5 (Ad Placement API)** pour
+   le site `swanca.github.io` ; Google valide le site (quelques jours).
+2. Récupérer l'identifiant d'éditeur `ca-pub-XXXXXXXXXXXXXXXX`.
+3. Construire avec cet identifiant :
+   ```bat
+   set EXPO_PUBLIC_ADSENSE_CLIENT=ca-pub-XXXXXXXXXXXXXXXX
+   node scripts/build-web.js petit-etal
+   ```
+   puis publier comme d'habitude. Le bouton devient « Regarder une pub » (code : `src/ui/ads.ts`).
+
+Dans l'APK, les pubs demandent **AdMob** (module natif `react-native-google-mobile-ads` + compte AdMob) : pas
+encore branché, l'APK garde les pleins offerts.
+
+## Achats en euros
+
+Pas encore branchés (aucun bouton factice n'est affiché). Il faut un moyen de paiement à ton nom :
+- **APK / Google Play** : compte développeur Google Play (25 $ une fois) + Google Play Billing ;
+- **site web** : Stripe (ou équivalent) et un petit serveur pour valider les paiements.
 
 # Plus tard : l'appli Android (APK / AAB)
 

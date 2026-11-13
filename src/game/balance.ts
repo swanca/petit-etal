@@ -186,6 +186,23 @@ export const SELL_RATIO = 0.3;
 export const MERGE_BONUS_RATIO = 0.1; // petite prime à chaque fusion
 export const DISCOVERY_BONUS_RATIO = 1; // prime à la première découverte
 
+// ---- Énergie : chaque objet sorti d'un stand coûte 1 énergie ----
+// Elle revient lentement (le joueur revient plus tard), ou d'un coup avec une pub, des pièces, un niveau gagné.
+export const ENERGY_REGEN_MS = 60_000; // 1 énergie par minute
+export const ENERGY_BASE_CAP = 30;
+export const energyCap = (lvl: number) => ENERGY_BASE_CAP + 5 * lvl; // amélioration « Grande réserve »
+export const START_ENERGY = 60; // premier lancement : de quoi finir le guidage et bien démarrer
+export const LEVELUP_ENERGY = 10; // en plus du plein, à chaque niveau
+export const CHEST_ENERGY = 20;
+export const DAILY_ENERGY = 20;
+export const ENERGY_PACK = 10;
+/** Pubs « plein d'énergie » par jour. Sans régie de pub configurée : recharges offertes, moins nombreuses. */
+export const AD_REFILLS_PER_DAY = 8;
+export const FREE_REFILLS_PER_DAY = 2;
+/** Prix en pièces de +10 énergie : suit le niveau, et monte à chaque achat du jour. */
+export const energyPackCost = (level: number, boughtToday: number) => Math.round(40 * Math.pow(1.45, level - 1) * Math.pow(1.3, boughtToday));
+export const energyFullCost = (level: number, missing: number, boughtToday: number) => Math.round((energyPackCost(level, boughtToday) * missing * 0.8) / ENERGY_PACK);
+
 // ---- Générateurs (stands) ----
 export const GEN_BASE_PERIOD_MS = 4000; // une charge toutes les 4 s au niveau 0
 export const GEN_PERIOD_FACTOR = 0.93; // ×0,93 par niveau
@@ -238,11 +255,11 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
   },
   cap: {
     id: 'cap',
-    name: 'Réserve',
-    img: 'package',
-    max: 8,
-    cost: (l) => Math.round(100 * Math.pow(2.2, l)),
-    desc: (l) => `${genCap(l)} → ${genCap(l + 1)} charges par stand`,
+    name: 'Grande réserve',
+    img: 'high_voltage',
+    max: 10,
+    cost: (l) => Math.round(150 * Math.pow(2.1, l)),
+    desc: (l) => `Énergie max ${energyCap(l)} → ${energyCap(l + 1)}`,
   },
   offline: {
     id: 'offline',
@@ -294,7 +311,7 @@ export type BoostDef = { id: BoostId; name: string; img: string; desc: string; m
 export const BOOST_IDS: BoostId[] = ['coins', 'speed', 'luck'];
 export const BOOSTS: Record<BoostId, BoostDef> = {
   coins: { id: 'coins', name: 'Coup de feu', img: 'fire', desc: 'Toutes les pièces ×2', ms: 5 * 60e3, cooldownMs: 20 * 60e3, unlockLevel: 3, color: '#E8612D' },
-  speed: { id: 'speed', name: 'Fournée express', img: 'high_voltage', desc: 'Les stands se rechargent 3× plus vite', ms: 3 * 60e3, cooldownMs: 15 * 60e3, unlockLevel: 4, color: '#E0A800' },
+  speed: { id: 'speed', name: 'Panier gratuit', img: 'basket', desc: 'Les stands ne coûtent plus d’énergie', ms: 60e3, cooldownMs: 45 * 60e3, unlockLevel: 4, color: '#E0A800' },
   luck: { id: 'luck', name: 'Bonne étoile', img: 'shooting_star', desc: 'Chaque objet sort un palier plus haut', ms: 2 * 60e3, cooldownMs: 25 * 60e3, unlockLevel: 6, color: '#7A5BD6' },
 };
 export const BOOST_COIN_MULT = 2;
@@ -318,11 +335,11 @@ export const missionTarget = (kind: MissionKind, n: number, incomePerSec: number
   const k = 1 + n * 0.12;
   switch (kind) {
     case 'merge':
-      return Math.round(Math.min(150, 8 * k));
+      return Math.round(Math.min(50, 6 * k));
     case 'order':
       return Math.round(Math.min(20, 2 + n * 0.25));
     case 'spawn':
-      return Math.round(Math.min(200, 15 * k));
+      return Math.round(Math.min(60, 10 * k)); // chaque objet coûte 1 énergie : objectif raisonnable
     case 'found':
       return 1;
     case 'earn':

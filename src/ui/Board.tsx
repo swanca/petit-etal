@@ -140,6 +140,8 @@ export type BoardHandle = {
   burst: (cell: number, text: string | undefined, color: string, big?: boolean) => void;
   /** Le prochain article d'identifiant `id` arrivera en volant depuis ce point de l'écran (ex. un stand). */
   flyFrom: (id: number, pageX: number, pageY: number) => void;
+  /** Centre d'une case, en coordonnées de la fenêtre (pour faire voler des pièces vers le compteur). */
+  cellCenter: (cell: number) => XY;
 };
 
 function FxItem({ fx, cs, done }: { fx: Fx; cs: number; done: () => void }) {
@@ -354,6 +356,12 @@ export const Board = memo(
         measure();
         const size = live.current.cs;
         reg.from.set(id, { x: pageX - origin.current.x - size / 2, y: pageY - origin.current.y - size / 2 });
+      },
+      cellCenter(cell) {
+        measure();
+        const size = live.current.cs;
+        const p = cellXY(cell, size);
+        return { x: origin.current.x + p.x + size / 2, y: origin.current.y + p.y + size / 2 };
       },
     }));
 

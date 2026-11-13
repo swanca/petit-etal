@@ -42,6 +42,10 @@ export type State = {
   tuto: number; // étape du guidage
   sound: boolean;
   music: boolean;
+  // --- énergie (permanente, comme la boutique) ---
+  energy: number;
+  energyProg: number; // ms accumulées vers la prochaine énergie
+  shop: { day: string; ads: number; buys: number }; // compteurs du jour (pubs vues, achats en pièces)
 };
 
 export const TUTO = { merge: 0, tapGen: 1, deliver: 2, upgrade: 3, done: 4 } as const;
@@ -62,6 +66,8 @@ export type Ev =
   | { t: 'bossWin'; level: number; coins: number; stars: number }
   | { t: 'full' }
   | { t: 'empty' }
+  | { t: 'noEnergy' }
+  | { t: 'energy'; amount: number; text: string }
   | { t: 'poor' };
 
 export type Res = { s: State; ev: Ev[] };
@@ -148,6 +154,9 @@ export function newGame(now: number): State {
       tuto: TUTO.merge,
       sound: true,
       music: true,
+      energy: B.START_ENERGY,
+      energyProg: 0,
+      shop: { day: '', ads: 0, buys: 0 },
     },
     true,
   );
@@ -160,6 +169,10 @@ export function loadState(raw: string | null): State | null {
     const s = JSON.parse(raw) as State;
     if (!s || s.v !== SAVE_VERSION || !Array.isArray(s.items) || !s.gens || !s.up || !s.life || !s.ever || !s.boosts || !s.boss || !Array.isArray(s.missions)) return null;
     for (const c of B.CHAIN_IDS) s.gens[c] ??= { level: 0, charges: B.GEN_BASE_CAP, prog: 0 };
+    // Sauvegardes d'avant l'énergie : on part plein.
+    if (typeof s.energy !== 'number') s.energy = B.energyCap(s.up.cap ?? 0);
+    s.energyProg ??= 0;
+    s.shop ??= { day: '', ads: 0, buys: 0 };
     return s;
   } catch {
     return null;
@@ -226,6 +239,7 @@ function addStars(s: State, stars: number, ev: Ev[]): State {
     const coins = Math.round(B.levelUpCoins(level) * B.ribbonMult(out.ribbons));
     const unlocked = B.CHAIN_IDS.find((c) => B.CHAINS[c].unlockLevel === level) ?? null;
     out = earn({ ...out, level, stars: rest, life: { ...out.life, maxLevel: Math.max(out.life.maxLevel, level) } }, coins);
+    out = { ...out, energy: Math.max(out.energy, energyMax(out)) + B.LEVELUP_ENERGY };
     if (unlocked) out = discover(out, unlocked, 1, [], 0); // le premier objet du stand entre dans la collection dès l'ouverture
     ev.push({ t: 'levelup', level, coins, unlocked });
   }
@@ -288,7 +302,8 @@ export function freeCell(s: State, rnd: () => number): number | null {
 export function tapGen(s: State, chain: ChainId, now: number, rnd: () => number = Math.random): Res {
   if (!chainUnlocked(s, chain)) return { s, ev: [] };
   const g = s.gens[chain];
-  if (g.charges <= 0) return { s, ev: [{ t: 'empty' }] };
+  const free = boostActive(s, 'speed', now);
+  if (!free && s.energy < 1) return { s, ev: [{ t: 'noEnergy' }] };
   const cell = freeCell(s, rnd);
   if (cell === null) return { s, ev: [{ t: 'full' }] };
   const odds = B.genTierOdds(g.level);
@@ -302,7 +317,9 @@ export function tapGen(s: State, chain: ChainId, now: number, rnd: () => number 
     ...s,
     nextId: id + 1,
     items: [...s.items, { id, chain, tier, cell }],
-    gens: { ...s.gens, [chain]: { ...g, charges: g.charges - 1 } },
+    energy: free ? s.energy : s.energy - 1,
+    // Énergie pleine jusque-là : la minute de recharge démarre maintenant.
+    energyProg: !free && s.energy >= energyMax(s) ? 0 : s.energyProg,
     tuto: s.tuto === TUTO.tapGen ? TUTO.deliver : s.tuto,
   };
   out = discover(out, chain, tier, ev, coinMult(s, now));
@@ -441,8 +458,9 @@ export function claimMission(s: State, id: number, rnd: () => number = Math.rand
   let out = earn({ ...s, missions: s.missions.filter((x) => x.id !== id), missionsDone: s.missionsDone + 1 }, reward);
   if (out.missionsDone % B.CHEST_EVERY === 0) {
     const coins = B.chestCoins(out.level, incomePerSec(out));
-    out = earn(out, coins);
+    out = { ...earn(out, coins), energy: out.energy + B.CHEST_ENERGY };
     ev.push({ t: 'reward', coins, text: 'Coffre de palier' });
+    ev.push({ t: 'energy', amount: B.CHEST_ENERGY, text: 'Coffre' });
   }
   out = addStars(out, m.stars, ev);
   out = fillMissions(out, rnd);
@@ -531,7 +549,13 @@ export function claimDaily(s: State, now: number): Res {
   if (!dailyReady(s, now)) return { s, ev: [] };
   const step = dailyStep(s, now);
   const coins = dailyCoins(s, step);
-  return { s: earn({ ...s, daily: { day: dayKey(now), streak: step } }, coins), ev: [{ t: 'reward', coins, text: 'Cadeau du jour' }] };
+  return {
+    s: { ...earn({ ...s, daily: { day: dayKey(now), streak: step } }, coins), energy: s.energy + B.DAILY_ENERGY },
+    ev: [
+      { t: 'reward', coins, text: 'Cadeau du jour' },
+      { t: 'energy', amount: B.DAILY_ENERGY, text: 'Cadeau du jour' },
+    ],
+  };
 }
 
 // ---------- Saisons ----------
@@ -545,6 +569,43 @@ export function prestige(s: State, now: number): Res {
   if (!canPrestige(s) || gain < 1) return { s, ev: [] };
   const out = seed({ ...s, ...freshRun(now), ever: { ...s.ever }, ribbons: s.ribbons + gain, season: s.season + 1, tuto: TUTO.done }, false);
   return { s: out, ev: [{ t: 'reward', coins: 0, text: 'Nouvelle saison' }] };
+}
+
+// ---------- Énergie et boutique ----------
+
+export const energyMax = (s: State) => B.energyCap(s.up.cap);
+/** ms avant la prochaine énergie (0 si pleine). */
+export const energyNextIn = (s: State) => (s.energy >= energyMax(s) ? 0 : Math.max(0, B.ENERGY_REGEN_MS - s.energyProg));
+/** ms avant le plein. */
+export const energyFullIn = (s: State) => (s.energy >= energyMax(s) ? 0 : energyNextIn(s) + (energyMax(s) - s.energy - 1) * B.ENERGY_REGEN_MS);
+
+function shopToday(s: State, now: number): State['shop'] {
+  const day = dayKey(now);
+  return s.shop.day === day ? s.shop : { day, ads: 0, buys: 0 };
+}
+export const adsLeft = (s: State, now: number, perDay: number) => Math.max(0, perDay - shopToday(s, now).ads);
+export const packCost = (s: State, now: number) => B.energyPackCost(s.level, shopToday(s, now).buys);
+export const fullCost = (s: State, now: number) => B.energyFullCost(s.level, Math.max(0, energyMax(s) - s.energy), shopToday(s, now).buys);
+
+/** Plein d'énergie après une pub regardée jusqu'au bout (ou une recharge offerte). */
+export function refillByAd(s: State, now: number, perDay: number): Res {
+  const shop = shopToday(s, now);
+  if (shop.ads >= perDay || s.energy >= energyMax(s)) return { s, ev: [] };
+  const amount = energyMax(s) - s.energy;
+  return { s: { ...s, energy: energyMax(s), energyProg: 0, shop: { ...shop, ads: shop.ads + 1 } }, ev: [{ t: 'energy', amount, text: 'Plein d’énergie' }] };
+}
+
+export function buyEnergy(s: State, now: number, kind: 'pack' | 'full'): Res {
+  const shop = shopToday(s, now);
+  const missing = energyMax(s) - s.energy;
+  if (kind === 'full' && missing <= 0) return { s, ev: [] };
+  const cost = kind === 'pack' ? packCost(s, now) : fullCost(s, now);
+  if (s.coins < cost) return { s, ev: [{ t: 'poor' }] };
+  const amount = kind === 'pack' ? B.ENERGY_PACK : missing;
+  return {
+    s: { ...s, coins: s.coins - cost, energy: s.energy + amount, energyProg: kind === 'full' ? 0 : s.energyProg, shop: { ...shop, buys: shop.buys + 1 } },
+    ev: [{ t: 'energy', amount, text: 'Énergie achetée' }],
+  };
 }
 
 // ---------- Temps ----------
@@ -564,29 +625,22 @@ export function advance(s: State, now: number, rnd: () => number = Math.random):
   // Le coup de feu ne compte que pour la partie du temps où il était encore actif.
   const boosted = Math.max(0, Math.min(paid, s.boosts.coins.until - s.lastSeen));
   const gain = (incomePerSec(s) * (paid + boosted * (B.BOOST_COIN_MULT - 1))) / 1000;
-  // Fournée express : le temps compte triple pour les stands tant que le boost dure.
-  const genDt = dt + Math.max(0, Math.min(dt, s.boosts.speed.until - s.lastSeen)) * (B.BOOST_SPEED_MULT - 1);
-
-  const capCharges = B.genCap(s.up.cap);
-  const gens = { ...s.gens };
-  for (const c of B.CHAIN_IDS) {
-    const g = gens[c];
-    if (g.charges >= capCharges) {
-      if (g.prog !== 0) gens[c] = { ...g, prog: 0 };
-      continue;
-    }
-    const period = B.genPeriodMs(g.level);
-    const total = g.prog + genDt;
-    const add = Math.min(capCharges - g.charges, Math.floor(total / period));
-    const charges = g.charges + add;
-    gens[c] = { ...g, charges, prog: charges >= capCharges ? 0 : total - add * period };
+  // Énergie : +1 par minute jusqu'au maximum (aussi pendant l'absence).
+  const max = energyMax(s);
+  let energy = s.energy;
+  let energyProg = 0;
+  if (energy < max) {
+    const total = s.energyProg + dt;
+    const add = Math.min(max - energy, Math.floor(total / B.ENERGY_REGEN_MS));
+    energy += add;
+    energyProg = energy >= max ? 0 : total - add * B.ENERGY_REGEN_MS;
   }
 
   const orders = s.orders.map((o) => (o.order || o.wait > 1e9 ? o : { ...o, wait: o.wait - dt }));
   // Combat perdu si le temps est écoulé : le Glouton repart, il faudra le défier à nouveau.
   const lost = s.boss.until > 0 && now >= s.boss.until;
   const boss = lost ? { ...s.boss, hp: 0, until: 0, ready: now + B.BOSS_COOLDOWN_MS } : s.boss;
-  let out: State = earn({ ...s, gens, orders, boss, lastSeen: now }, gain);
+  let out: State = earn({ ...s, energy, energyProg, orders, boss, lastSeen: now }, gain);
   out = fillOrders(out, rnd);
   const offline = away ? { seconds: Math.round(dt / 1000), capped: dt > cap, coins: Math.floor(gain) } : null;
   return { s: out, offline, bossLost: lost };
