@@ -59,7 +59,7 @@ export type Ev =
   | { t: 'order'; slot: number; coins: number; stars: number }
   | { t: 'levelup'; level: number; coins: number; unlocked: ChainId | null }
   | { t: 'upgrade' }
-  | { t: 'reward'; coins: number; text: string }
+  | { t: 'reward'; coins: number; text: string; stars?: number }
   | { t: 'boost' }
   | { t: 'hit'; cell: number; dmg: number }
   | { t: 'bossStart' }
@@ -454,7 +454,7 @@ export function claimMission(s: State, id: number, rnd: () => number = Math.rand
   const m = s.missions.find((x) => x.id === id);
   if (!m || m.prog < m.target) return { s, ev: [] };
   const reward = missionReward(s, m);
-  const ev: Ev[] = [{ t: 'reward', coins: reward, text: 'Mission accomplie' }];
+  const ev: Ev[] = [{ t: 'reward', coins: reward, text: 'Mission accomplie', stars: m.stars }];
   let out = earn({ ...s, missions: s.missions.filter((x) => x.id !== id), missionsDone: s.missionsDone + 1, energy: s.energy + B.MISSION_ENERGY }, reward);
   if (out.missionsDone % B.CHEST_EVERY === 0) {
     const coins = B.chestCoins(out.level, incomePerSec(out));

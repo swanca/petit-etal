@@ -169,8 +169,12 @@ const Header = memo(function Header({
   free,
   coinRef,
   bump,
+  starRef,
+  starBump,
   onEnergy,
 }: {
+  starRef: { current: ViewRef | null };
+  starBump: Animated.Value;
   level: number;
   stars: number;
   coins: number;
@@ -189,8 +193,8 @@ const Header = memo(function Header({
   const empty = energy < 1 && !free;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingTop: 5, paddingBottom: 5, gap: 6 }}>
-      <View style={[pill, { gap: 4, paddingHorizontal: 6 }]}>
-        <View style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View style={[pill, { gap: 4, paddingHorizontal: 6, transform: [{ scale: starBump.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }) }] }]}>
+        <View ref={starRef} style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="star" size={28} />
           <T style={{ position: 'absolute', fontFamily: F.title, fontSize: 11, lineHeight: 13, color: C.ink, top: 9 }}>{level}</T>
         </View>
@@ -211,7 +215,7 @@ const Header = memo(function Header({
             {stars}/{need} étoiles
           </T>
         </View>
-      </View>
+      </Animated.View>
       <Pressable onPress={onEnergy} style={[pill, { gap: 4, paddingHorizontal: 6, borderColor: empty ? C.red : free ? '#E0A800' : C.line }]}>
         <Icon name="high_voltage" size={26} />
         <View style={{ flex: 1 }}>
@@ -219,8 +223,8 @@ const Header = memo(function Header({
             {energy}
             <T style={{ fontFamily: F.semi, fontSize: 11, color: C.inkSoft }}>/{energyMax}</T>
           </T>
-          <T style={{ fontSize: 10.5, lineHeight: 13, color: free ? '#B88A00' : C.inkSoft }} numberOfLines={1}>
-            {free ? 'gratuit !' : nextIn > 0 ? `+1 · ${clock(nextIn)}` : 'plein'}
+          <T style={{ fontSize: 10.5, lineHeight: 13, color: free || energy > energyMax ? '#B88A00' : C.inkSoft, fontFamily: energy > energyMax ? F.semi : F.text }} numberOfLines={1}>
+            {free ? 'gratuit !' : nextIn > 0 ? `+1 · ${clock(nextIn)}` : energy > energyMax ? 'bonus !' : 'plein'}
           </T>
         </View>
         <View style={{ width: 17, height: 17, borderRadius: 9, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderBottomColor: C.greenDark }}>
@@ -246,7 +250,8 @@ const Header = memo(function Header({
 
 // ---------- Pièces qui volent vers le compteur ----------
 
-type CoinFly = { id: number; x: number; y: number; tx: number; ty: number; n: number };
+// Pièces vers le compteur de pièces, étoiles vers la jauge de niveau.
+type CoinFly = { id: number; x: number; y: number; tx: number; ty: number; n: number; star?: boolean };
 
 function FlyingCoin({ f, i, onArrive }: { f: CoinFly; i: number; onArrive: (last: boolean) => void }) {
   const [t] = useState(() => new Animated.Value(0));
@@ -268,12 +273,12 @@ function FlyingCoin({ f, i, onArrive }: { f: CoinFly; i: number; onArrive: (last
   const scale = t.interpolate({ inputRange: [0, 0.15, 0.28, 1], outputRange: [0.3, 1.15, 1, 0.75] });
   return (
     <Animated.View pointerEvents="none" style={{ position: 'absolute', left: f.x - 13, top: f.y - 13, transform: [{ translateX: x }, { translateY: y }, { scale }] }}>
-      <Icon name="coin" size={26} />
+      <Icon name={f.star ? 'star' : 'coin'} size={26} />
     </Animated.View>
   );
 }
 
-const CoinLayer = memo(function CoinLayer({ flies, onArrive, onDone }: { flies: CoinFly[]; onArrive: () => void; onDone: (id: number) => void }) {
+const CoinLayer = memo(function CoinLayer({ flies, onArrive, onDone }: { flies: CoinFly[]; onArrive: (star: boolean) => void; onDone: (id: number) => void }) {
   return (
     <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 50 }}>
       {flies.map((f) =>
@@ -283,7 +288,7 @@ const CoinLayer = memo(function CoinLayer({ flies, onArrive, onDone }: { flies: 
             f={f}
             i={i}
             onArrive={(last) => {
-              onArrive();
+              onArrive(!!f.star);
               if (last) onDone(f.id);
             }}
           />
@@ -403,7 +408,11 @@ function Chip({ img, label, color, state, onPress, pulse }: { img: ImgName; labe
     <Pressable onPress={onPress} style={{ flex: 1 }}>
       {pulse ? <Pulse radius={14} color={color} /> : null}
       <View style={{ height: 34, borderRadius: 12, borderWidth: 2, borderColor: state === 'ready' || state === 'active' ? color : C.grey, backgroundColor: bg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: 3 }}>
-        <Icon name={state === 'locked' ? 'locked' : img} size={18} style={{ opacity: state === 'wait' || state === 'locked' ? 0.5 : 1 }} />
+        {/* Verrouillé : on montre déjà le boost à venir, en pâle, avec un petit cadenas. */}
+        <View>
+          <Icon name={img} size={18} style={{ opacity: state === 'locked' ? 0.35 : state === 'wait' ? 0.5 : 1 }} />
+          {state === 'locked' ? <Icon name="locked" size={10} style={{ position: 'absolute', right: -3, bottom: -2 }} /> : null}
+        </View>
         <T style={{ fontFamily: F.semi, fontSize: 11.5, color: state === 'active' ? C.white : state === 'ready' ? C.ink : C.inkSoft }} numberOfLines={1}>
           {label}
         </T>
@@ -421,8 +430,11 @@ function GenButton({ chain, s, pulse, fast, onTap }: { chain: ChainId; s: State;
   if (!E.chainUnlocked(s, chain)) {
     return (
       <View style={{ flex: 1, height: 68, borderRadius: 14, backgroundColor: C.line, alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-        <Icon name="locked" size={20} style={{ opacity: 0.7 }} />
-        <T style={{ fontSize: 9.5, color: C.inkSoft }}>Niv. {def.unlockLevel}</T>
+        <View>
+          <Icon name={def.maker as ImgName} size={30} style={{ opacity: 0.3 }} />
+          <Icon name="locked" size={14} style={{ position: 'absolute', right: -4, bottom: -2 }} />
+        </View>
+        <T style={{ fontSize: 9.5, lineHeight: 11, color: C.inkSoft }}>Niv. {def.unlockLevel}</T>
       </View>
     );
   }
@@ -440,7 +452,10 @@ function GenButton({ chain, s, pulse, fast, onTap }: { chain: ChainId; s: State;
       <Animated.View style={{ height: 68, borderRadius: 14, backgroundColor: def.color, paddingBottom: 4, transform: [{ scale: bounce }], opacity: can ? 1 : 0.55 }}>
         <View style={{ flex: 1, borderRadius: 14, backgroundColor: def.soft, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: fast ? '#E0A800' : def.color }}>
           <Icon name={def.maker as ImgName} size={34} />
-          <T style={{ fontFamily: F.semi, fontSize: 9.5, lineHeight: 11, color: C.inkSoft }}>niv. {g.level}</T>
+          <T style={{ fontFamily: F.semi, fontSize: 9.5, lineHeight: 11, color: C.inkSoft }} numberOfLines={1}>
+            {def.name}
+            {g.level > 0 ? <T style={{ fontFamily: F.title, fontSize: 9.5, color: def.color }}> {g.level}</T> : null}
+          </T>
         </View>
       </Animated.View>
       <View style={{ position: 'absolute', right: -3, top: -6, flexDirection: 'row', alignItems: 'center', paddingLeft: 2, paddingRight: 5, height: 18, borderRadius: 9, backgroundColor: fast ? '#E0A800' : can ? def.color : C.greyDark, borderWidth: 2, borderColor: C.white }}>
@@ -518,11 +533,26 @@ export function Game() {
     if (!r.w) return;
     setFlies((l) => (l.length > 6 ? l : [...l, { id: flyId.current++, x, y, tx: r.x + r.w / 2, ty: r.y + r.h / 2, n }]));
   }, []);
-  const onCoinArrive = useCallback(() => {
-    coinBump.stopAnimation();
-    coinBump.setValue(1);
-    Animated.spring(coinBump, { toValue: 0, friction: 4, tension: 200, useNativeDriver: NATIVE }).start();
-  }, [coinBump]);
+  const starRef = useRef<ViewRef>(null);
+  const starRect = useRef<Rect>({ x: 0, y: 0, w: 0, h: 0 });
+  const [starBump] = useState(() => new Animated.Value(0));
+  // Étoiles gagnées : elles filent vers la jauge de niveau (5 au plus, pour rester lisible).
+  const flyStars = useCallback((x: number, y: number, stars: number) => {
+    measureRect(starRef, starRect);
+    const r = starRect.current;
+    if (!r.w || stars <= 0) return;
+    const n = Math.min(5, Math.max(1, Math.ceil(stars / 3)));
+    setFlies((l) => (l.length > 8 ? l : [...l, { id: flyId.current++, x, y, tx: r.x + r.w / 2, ty: r.y + r.h / 2, n, star: true }]));
+  }, []);
+  const onCoinArrive = useCallback(
+    (star: boolean) => {
+      const b = star ? starBump : coinBump;
+      b.stopAnimation();
+      b.setValue(1);
+      Animated.spring(b, { toValue: 0, friction: 4, tension: 200, useNativeDriver: NATIVE }).start();
+    },
+    [coinBump, starBump],
+  );
   const onFlyDone = useCallback((id: number) => setFlies((l) => l.filter((f) => f.id !== id)), []);
   const fromCell = useCallback(
     (cell: number, n: number) => {
@@ -584,7 +614,13 @@ export function Game() {
           fx.current?.burst(ev.cell, `+${fmt(ev.coins)}`, C.gold);
         } else if (ev.t === 'order') {
           play('order');
-          fromRect(topRef, 7);
+          // Pièces et étoiles partent de la carte du client servi.
+          const rr = { current: { x: 0, y: 0, w: 0, h: 0 } };
+          measureRect(topRef, rr);
+          const ox = rr.current.x + (rr.current.w * (ev.slot + 0.5)) / Math.max(1, B.ORDER_SLOTS);
+          const oy = rr.current.y + rr.current.h / 2;
+          flyCoins(ox, oy, 7);
+          flyStars(ox, oy, ev.stars);
           buzz('success');
           say(`Commande livrée !  +${fmt(ev.coins)}`, 'coin');
         } else if (ev.t === 'levelup') {
@@ -595,6 +631,7 @@ export function Game() {
           buzz('success');
         } else if (ev.t === 'reward') {
           if (ev.coins > 0) flyCoins(dims.width / 2, dims.height / 2, 8);
+          if (ev.stars) flyStars(dims.width / 2, dims.height / 2, ev.stars);
           play(ev.text === 'Coffre de palier' ? 'chest' : ev.text === 'Cadeau du jour' ? 'daily' : 'quest');
           say(ev.coins > 0 ? `${ev.text} !  +${fmt(ev.coins)}` : `${ev.text} !`, ev.text === 'Coffre de palier' ? 'wrapped_gift' : 'coin');
         } else if (ev.t === 'boost') {
@@ -610,6 +647,7 @@ export function Game() {
         } else if (ev.t === 'bossWin') {
           play('quest');
           fromRect(topRef, 8);
+          flyStars(dims.width / 2, dims.height / 3, ev.stars);
           buzz('success');
           setReward({ img: B.bossOf(ev.level).img as ImgName, title: 'Glouton repoussé !', text: `${B.bossOf(ev.level).name} (niv. ${ev.level}) a pris la fuite. Le suivant sera plus coriace.`, coins: ev.coins, stars: ev.stars });
         } else if (ev.t === 'move') {
@@ -637,7 +675,7 @@ export function Game() {
         }
       }
     },
-    [say, fromCell, fromRect, flyCoins, dims.width, dims.height],
+    [say, fromCell, fromRect, flyCoins, flyStars, dims.width, dims.height],
   );
   const run = useCallback((fn: (st: State, now: number) => E.Res) => react(act((st) => fn(st, Date.now()))), [act, react]);
 
@@ -765,7 +803,7 @@ export function Game() {
         <View onLayout={(e) => setBannerH(Math.round(e.nativeEvent.layout.height))}>
           <InstallBanner ready={tuto >= E.TUTO.upgrade} onOpen={() => setSheet('install')} />
         </View>
-        <Header level={s.level} stars={s.stars} coins={s.coins} rate={rate * (coinBoost ? B.BOOST_COIN_MULT : 1)} ribbons={s.ribbons} boosted={coinBoost} coinRef={coinRef} bump={coinBump} energy={s.energy} energyMax={E.energyMax(s)} nextIn={E.energyNextIn(s)} free={E.boostActive(s, 'speed', now)} onEnergy={() => setSheet('shop')} />
+        <Header level={s.level} stars={s.stars} coins={s.coins} rate={rate * (coinBoost ? B.BOOST_COIN_MULT : 1)} ribbons={s.ribbons} boosted={coinBoost} coinRef={coinRef} bump={coinBump} starRef={starRef} starBump={starBump} energy={s.energy} energyMax={E.energyMax(s)} nextIn={E.energyNextIn(s)} free={E.boostActive(s, 'speed', now)} onEnergy={() => setSheet('shop')} />
 
         <View ref={topRef} style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 10, paddingTop: 3 }}>
           {fighting ? <BossPanel s={s} now={now} hitKey={hitKey} dragging={dragging} /> : s.orders.map((o, i) => <OrderCard key={i} slot={i} order={o.order} s={s} now={now} pulse={tuto === E.TUTO.deliver} onDeliver={onDeliver} onSkip={onSkip} />)}
