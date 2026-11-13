@@ -44,13 +44,17 @@ export function ShopSheet({ s, now, onClose, onAd, onBuy }: { s: State; now: num
               {s.energy}
               <T style={{ fontFamily: F.semi, fontSize: 15, color: C.inkSoft }}> / {max}</T>
             </T>
-            <T style={{ fontSize: 13, color: C.inkSoft }}>{full ? 'Énergie pleine : profites-en !' : `+1 par minute · plein dans ${fmtDuration(E.energyFullIn(s) / 1000)}`}</T>
+            <T style={{ fontSize: 13, color: C.inkSoft }}>{full ? 'Énergie pleine : profites-en !' : `+1 toutes les ${Math.round(E.energyRegen(s) / 1000)} s · plein dans ${fmtDuration(E.energyFullIn(s) / 1000)}`}</T>
           </View>
         </View>
         <View style={{ height: 10, borderRadius: 5, backgroundColor: C.line, overflow: 'hidden' }}>
           <View style={{ height: 10, borderRadius: 5, backgroundColor: '#E0A800', width: `${Math.min(100, (s.energy / max) * 100)}%` }} />
         </View>
-        <T style={{ fontSize: 12, color: C.inkSoft }}>Chaque objet sorti d’un stand coûte 1 énergie. Un niveau gagné remplit la jauge, comme le cadeau du jour et les coffres.</T>
+        <T style={{ fontSize: 12, color: C.inkSoft }}>
+          Chaque objet sorti d’un stand coûte 1 énergie. Chaque niveau gagné remplit la jauge et l’agrandit ; missions, coffres et cadeau du jour en donnent aussi.
+          {s.level < 5 ? ' Recharge rapide jusqu’au niveau 5 !' : ''}
+        </T>
+        <T style={{ fontSize: 12, color: C.greenDark }}>En attendant, tu peux toujours fusionner, livrer les commandes et vendre.</T>
       </View>
 
       <View style={{ backgroundColor: '#FFF6D6', borderRadius: 16, borderWidth: 2, borderColor: C.gold, padding: 12, gap: 8 }}>

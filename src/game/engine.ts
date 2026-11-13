@@ -170,7 +170,7 @@ export function loadState(raw: string | null): State | null {
     if (!s || s.v !== SAVE_VERSION || !Array.isArray(s.items) || !s.gens || !s.up || !s.life || !s.ever || !s.boosts || !s.boss || !Array.isArray(s.missions)) return null;
     for (const c of B.CHAIN_IDS) s.gens[c] ??= { level: 0, charges: B.GEN_BASE_CAP, prog: 0 };
     // Sauvegardes d'avant l'énergie : on part plein.
-    if (typeof s.energy !== 'number') s.energy = B.energyCap(s.up.cap ?? 0);
+    if (typeof s.energy !== 'number') s.energy = B.energyCap(s.up.cap ?? 0, s.level);
     s.energyProg ??= 0;
     s.shop ??= { day: '', ads: 0, buys: 0 };
     return s;
@@ -455,7 +455,7 @@ export function claimMission(s: State, id: number, rnd: () => number = Math.rand
   if (!m || m.prog < m.target) return { s, ev: [] };
   const reward = missionReward(s, m);
   const ev: Ev[] = [{ t: 'reward', coins: reward, text: 'Mission accomplie' }];
-  let out = earn({ ...s, missions: s.missions.filter((x) => x.id !== id), missionsDone: s.missionsDone + 1 }, reward);
+  let out = earn({ ...s, missions: s.missions.filter((x) => x.id !== id), missionsDone: s.missionsDone + 1, energy: s.energy + B.MISSION_ENERGY }, reward);
   if (out.missionsDone % B.CHEST_EVERY === 0) {
     const coins = B.chestCoins(out.level, incomePerSec(out));
     out = { ...earn(out, coins), energy: out.energy + B.CHEST_ENERGY };
@@ -573,11 +573,12 @@ export function prestige(s: State, now: number): Res {
 
 // ---------- Énergie et boutique ----------
 
-export const energyMax = (s: State) => B.energyCap(s.up.cap);
+export const energyMax = (s: State) => B.energyCap(s.up.cap, s.level);
+export const energyRegen = (s: State) => B.energyRegenMs(s.level);
 /** ms avant la prochaine énergie (0 si pleine). */
-export const energyNextIn = (s: State) => (s.energy >= energyMax(s) ? 0 : Math.max(0, B.ENERGY_REGEN_MS - s.energyProg));
+export const energyNextIn = (s: State) => (s.energy >= energyMax(s) ? 0 : Math.max(0, energyRegen(s) - s.energyProg));
 /** ms avant le plein. */
-export const energyFullIn = (s: State) => (s.energy >= energyMax(s) ? 0 : energyNextIn(s) + (energyMax(s) - s.energy - 1) * B.ENERGY_REGEN_MS);
+export const energyFullIn = (s: State) => (s.energy >= energyMax(s) ? 0 : energyNextIn(s) + (energyMax(s) - s.energy - 1) * energyRegen(s));
 
 function shopToday(s: State, now: number): State['shop'] {
   const day = dayKey(now);
@@ -610,7 +611,7 @@ export function buyEnergy(s: State, now: number, kind: 'pack' | 'full'): Res {
 
 // ---------- Temps ----------
 
-export type Offline = { seconds: number; capped: boolean; coins: number };
+export type Offline = { seconds: number; capped: boolean; coins: number; energy: number; energyFull: boolean };
 
 /**
  * Avance le temps jusqu'à `now`. Un écart court est un tic normal ; un écart long (appli fermée ou en
@@ -631,9 +632,10 @@ export function advance(s: State, now: number, rnd: () => number = Math.random):
   let energyProg = 0;
   if (energy < max) {
     const total = s.energyProg + dt;
-    const add = Math.min(max - energy, Math.floor(total / B.ENERGY_REGEN_MS));
+    const period = energyRegen(s);
+    const add = Math.min(max - energy, Math.floor(total / period));
     energy += add;
-    energyProg = energy >= max ? 0 : total - add * B.ENERGY_REGEN_MS;
+    energyProg = energy >= max ? 0 : total - add * period;
   }
 
   const orders = s.orders.map((o) => (o.order || o.wait > 1e9 ? o : { ...o, wait: o.wait - dt }));
@@ -642,6 +644,6 @@ export function advance(s: State, now: number, rnd: () => number = Math.random):
   const boss = lost ? { ...s.boss, hp: 0, until: 0, ready: now + B.BOSS_COOLDOWN_MS } : s.boss;
   let out: State = earn({ ...s, energy, energyProg, orders, boss, lastSeen: now }, gain);
   out = fillOrders(out, rnd);
-  const offline = away ? { seconds: Math.round(dt / 1000), capped: dt > cap, coins: Math.floor(gain) } : null;
+  const offline = away ? { seconds: Math.round(dt / 1000), capped: dt > cap, coins: Math.floor(gain), energy: energy - s.energy, energyFull: energy >= max } : null;
   return { s: out, offline, bossLost: lost };
 }

@@ -506,6 +506,7 @@ export function Game() {
   const width = Math.min(dims.width, MAX_W);
   // 434 : hauteur de tout ce qui n'est pas le plateau (bandeau, commandes, boosts, info, stands, barre du bas).
   const [bannerH, setBannerH] = useState(0);
+  const shopShown = useRef(0);
   const coinRef = useRef<ViewRef>(null);
   const coinRect = useRef<Rect>({ x: 0, y: 0, w: 0, h: 0 });
   const [coinBump] = useState(() => new Animated.Value(0));
@@ -620,7 +621,10 @@ export function Game() {
         } else if (ev.t === 'noEnergy') {
           play('error');
           buzz('error');
-          setSheet('shop');
+          if (Date.now() - shopShown.current > 120e3) {
+            shopShown.current = Date.now();
+            setSheet('shop');
+          } else say('Plus d’énergie : fusionne et livre en attendant !', 'high_voltage');
         } else if (ev.t === 'energy') {
           play('boost');
           say(`${ev.text} : +${ev.amount} énergie`, 'high_voltage');

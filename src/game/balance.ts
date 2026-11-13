@@ -188,9 +188,14 @@ export const DISCOVERY_BONUS_RATIO = 1; // prime à la première découverte
 
 // ---- Énergie : chaque objet sorti d'un stand coûte 1 énergie ----
 // Elle revient lentement (le joueur revient plus tard), ou d'un coup avec une pub, des pièces, un niveau gagné.
-export const ENERGY_REGEN_MS = 60_000; // 1 énergie par minute
+// Ralentir sans frustrer : recharge rapide pour les débutants, puis de plus en plus lente ; la jauge grandit
+// avec le niveau, et chaque niveau gagné la remplit (les premiers niveaux arrivent vite).
+export const ENERGY_REGEN_MS = 60_000; // rythme de croisière : 1 énergie par minute
+export const energyRegenMs = (level: number) => (level < 5 ? 20_000 : level < 10 ? 40_000 : ENERGY_REGEN_MS);
 export const ENERGY_BASE_CAP = 30;
-export const energyCap = (lvl: number) => ENERGY_BASE_CAP + 5 * lvl; // amélioration « Grande réserve »
+/** Jauge max : base + « Grande réserve » (+5 par niveau d'amélioration) + niveau du joueur (+2 par niveau, jusqu'à +20). */
+export const energyCap = (reserve: number, level = 1) => ENERGY_BASE_CAP + 5 * reserve + Math.min(20, 2 * (level - 1));
+export const MISSION_ENERGY = 5;
 export const START_ENERGY = 60; // premier lancement : de quoi finir le guidage et bien démarrer
 export const LEVELUP_ENERGY = 10; // en plus du plein, à chaque niveau
 export const CHEST_ENERGY = 20;
@@ -259,7 +264,7 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
     img: 'high_voltage',
     max: 10,
     cost: (l) => Math.round(150 * Math.pow(2.1, l)),
-    desc: (l) => `Énergie max ${energyCap(l)} → ${energyCap(l + 1)}`,
+    desc: (l) => `Énergie max +${5 * l} → +${5 * (l + 1)}`,
   },
   offline: {
     id: 'offline',

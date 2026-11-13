@@ -267,7 +267,10 @@ export function OfflineModal({ data, capSec, onClose }: { data: Offline; capSec:
         <T style={{ fontFamily: F.title, fontSize: 28 }}>+{fmt(data.coins)}</T>
       </View>
       {data.capped ? <T style={{ fontSize: 12, color: C.redDark, textAlign: 'center' }}>Plafond de {fmtDuration(capSec)} atteint : la Veilleuse (dans Améliorer) l&apos;allonge.</T> : null}
-      <T style={{ fontSize: 12, color: C.inkSoft, textAlign: 'center' }}>Tes stands sont rechargés.</T>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <Icon name="high_voltage" size={22} />
+        <T style={{ fontFamily: F.semi, fontSize: 14 }}>{data.energyFull ? 'Énergie pleine : à toi de jouer !' : `+${data.energy} énergie récupérée`}</T>
+      </View>
       <Btn label="Encaisser" icon="coin" onPress={onClose} style={{ alignSelf: 'stretch' }} />
     </Modal>
   );
@@ -282,6 +285,8 @@ export function LevelUpModal({ data, onClose }: { data: LevelUp; onClose: () => 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <Icon name="coin" size={26} />
         <T style={{ fontFamily: F.title, fontSize: 22 }}>+{fmt(data.coins)}</T>
+        <Icon name="high_voltage" size={24} style={{ marginLeft: 8 }} />
+        <T style={{ fontFamily: F.title, fontSize: 18 }}>Énergie pleine</T>
       </View>
       {def ? (
         <View style={{ alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: def.soft, borderRadius: 18, borderWidth: 2, borderColor: def.color, padding: 10 }}>
@@ -351,6 +356,8 @@ export function MissionsSheet({ s, now, onClose, onClaim, onDaily }: { s: State;
                 <T style={{ fontFamily: F.semi, fontSize: 12 }}>{fmt(E.missionReward(s, m))}</T>
                 <Icon name="star" size={12} style={{ marginLeft: 4 }} />
                 <T style={{ fontFamily: F.semi, fontSize: 12 }}>{m.stars}</T>
+                <Icon name="high_voltage" size={12} style={{ marginLeft: 4 }} />
+                <T style={{ fontFamily: F.semi, fontSize: 12 }}>{B.MISSION_ENERGY}</T>
               </View>
             </View>
             <Btn label={done ? 'Prendre' : 'En cours'} small disabled={!done} onPress={() => onClaim(m.id)} style={{ minWidth: 84 }} />

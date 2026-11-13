@@ -35,13 +35,11 @@ Le jeu affiche un bandeau **Installer** (et un bouton dans Réglages ⚙) qui do
 téléphone et le navigateur :
 
 - **Android (Chrome)** : installation en un toucher quand Chrome la propose, sinon menu ⋮ → **Installer l'application**.
-  Le panneau propose aussi **Télécharger l'APK** : la vraie appli, publiée à côté du site (`petit-etal.apk`).
 - **iPhone (Safari)** : bouton Partager → **Sur l'écran d'accueil** → **Ajouter**.
 - **Lien ouvert dans Messenger, Instagram, Discord…** : ces navigateurs intégrés ne savent pas installer ; le panneau
   dit d'ouvrir le lien dans Chrome/Safari (bouton direct « Ouvrir dans Chrome » sur Android).
 
-Pour publier une nouvelle APK avec le site : `build-android.bat apk`, puis `node scripts/build-web.js petit-etal`
-(le script copie `apk/petit-etal-arm64.apk` dans `dist/petit-etal.apk`), puis la publication habituelle.
+Pas d'APK sur le site pour l'instant : l'appli Android sera publiée sur le Play Store (voir plus bas).
 
 Lancé depuis l'icône, le jeu s'ouvre en plein écran, sans barre de navigateur. La sauvegarde est sur l'appareil
 (stockage du navigateur) : désinstaller l'appli ou vider les données du site l'efface.

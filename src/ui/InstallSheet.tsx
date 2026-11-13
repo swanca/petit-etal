@@ -3,7 +3,7 @@
 import { ReactNode, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { ImgName } from './images';
-import { apkUrl, copyLink, downloadApk, InstallEnv, isAndroid, openInChrome, promptInstall, siteUrl, useInstallEnv } from './install';
+import { copyLink, InstallEnv, isAndroid, openInChrome, promptInstall, siteUrl, useInstallEnv } from './install';
 import { Sheet } from './Sheets';
 import { Btn, C, F, Icon, T } from './theme';
 
@@ -85,16 +85,6 @@ function Card({ title, img, children }: { title: string; img: ImgName; children:
   );
 }
 
-function ApkCard() {
-  return (
-    <Card title="Appli Android (fichier APK)" img="package">
-      <T style={{ fontSize: 13, color: C.inkSoft }}>La vraie appli, sans navigateur. Ton téléphone te demandera d’autoriser l’installation depuis Chrome : c’est normal pour une appli hors Play Store.</T>
-      <Btn label="Télécharger l’APK" icon="package" color="#3B8FD9" dark="#2A6FB0" onPress={downloadApk} />
-      <T style={{ fontSize: 11, color: C.inkSoft }}>{apkUrl()}</T>
-    </Card>
-  );
-}
-
 function Body({ env, onDone }: { env: InstallEnv; onDone: () => void }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => setCopied(await copyLink());
@@ -119,7 +109,6 @@ function Body({ env, onDone }: { env: InstallEnv; onDone: () => void }) {
             }}
           />
         </Card>
-        {isAndroid() ? <ApkCard /> : null}
       </>
     );
   }
@@ -147,7 +136,6 @@ function Body({ env, onDone }: { env: InstallEnv; onDone: () => void }) {
           <Step n={3}>Là, touche « Installer » dans le bandeau du jeu.</Step>
           <Btn label={copied ? 'Lien copié !' : 'Copier le lien du jeu'} small color={C.greyDark} dark="#8A7D6B" onPress={copy} />
         </Card>
-        {isAndroid() ? <ApkCard /> : null}
       </>
     );
   }
@@ -160,7 +148,6 @@ function Body({ env, onDone }: { env: InstallEnv; onDone: () => void }) {
           <Step n={3}>Confirme : le jeu s’ouvre ensuite en plein écran depuis son icône.</Step>
           <T style={{ fontSize: 12, color: C.inkSoft }}>Sur Samsung Internet : menu ☰, puis « Ajouter la page à » → « Écran d’accueil ». Sur Firefox : menu ⋮, puis « Installer ».</T>
         </Card>
-        <ApkCard />
       </>
     );
   }

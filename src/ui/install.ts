@@ -81,13 +81,12 @@ export async function promptInstall(): Promise<boolean> {
   }
 }
 
-/** Adresse du jeu (sans paramètres) et du fichier APK publié à côté. */
+/** Adresse du jeu (sans paramètres). */
 export function siteUrl(): string {
   if (!web) return 'https://swanca.github.io/petit-etal/';
   const { origin, pathname } = window.location;
   return origin + pathname.replace(/[^/]*$/, '');
 }
-export const apkUrl = () => siteUrl() + 'petit-etal.apk';
 
 /** Android : rouvre la page dans Chrome depuis le navigateur d'une appli. */
 export function openInChrome(): void {
@@ -102,10 +101,6 @@ export async function copyLink(): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-export function downloadApk(): void {
-  Linking.openURL(apkUrl()).catch(() => {});
 }
 
 export const canFullscreen = () => web && !!document.documentElement.requestFullscreen;
