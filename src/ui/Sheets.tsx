@@ -239,7 +239,7 @@ export function SettingsSheet({ s, onClose, onSound, onMusic, onReset }: { s: St
           <Btn label="Recommencer à zéro" small color={C.greyDark} dark="#8A7D6B" onPress={() => setConfirm(true)} />
         )}
       </View>
-      <T style={{ fontSize: 11, color: C.inkSoft, textAlign: 'center' }}>Petit Étal · images Fluent Emoji (Microsoft, MIT) · polices Fredoka et Nunito (OFL)</T>
+      <T style={{ fontSize: 11, color: C.inkSoft, textAlign: 'center' }}>Petit Étal · images Fluent Emoji (Microsoft, MIT) · polices Fredoka et Nunito (OFL) · sons Kenney (CC0), « Cozy Farm SFX » par Bramble & Byte (CC-BY 4.0), ambiance « Park Ambiences » par Thimras (CC0) et « Crowd Shouting/Speaking Ambience » (CC0), musique « Busy Day At The Market » par ViRiX Dreamcore (CC-BY 3.0) — OpenGameArt.org</T>
     </Sheet>
   );
 }

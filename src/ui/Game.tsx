@@ -10,7 +10,7 @@ import { useGame } from '../game/useGame';
 import { Board, BoardHandle } from './Board';
 import { ImgName } from './images';
 import { BossIntroModal, CollectionSheet, DailyModal, LevelUpModal, MissionsSheet, OfflineModal, RewardModal, SettingsSheet, TrophiesSheet, UpgradesSheet } from './Sheets';
-import { buzz, pauseMusic, play, setMusic, setSoundEnabled } from './sfx';
+import { buzz, pauseMusic, play, playMerge, setMusic, setSoundEnabled, startAudio } from './sfx';
 import { Btn, C, F, fmt, fmtClock, fmtRate, Icon, NATIVE, T } from './theme';
 
 const MAX_W = 460;
@@ -68,20 +68,79 @@ function Badge({ n }: { n: number }) {
 }
 
 /** Store rayé du marché, tout en haut. */
+/** Petits passants qui traversent l'auvent de temps en temps (pure décoration). */
+const VISITORS: ImgName[] = ['cat', 'duck', 'chicken', 'hedgehog', 'chipmunk', 'turtle'];
+
+function Visitor({ width }: { width: number }) {
+  const [walk] = useState(() => new Animated.Value(0));
+  const [step] = useState(() => new Animated.Value(0));
+  const [who, setWho] = useState<{ img: ImgName; ms: number } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const next = (delay: number) => {
+      timer = setTimeout(() => {
+        if (!alive) return;
+        const img = VISITORS[Math.floor(Math.random() * VISITORS.length)];
+        const ms = img === 'turtle' ? 16000 : img === 'hedgehog' ? 11000 : 7500;
+        setWho({ img, ms });
+        walk.setValue(0);
+        Animated.timing(walk, { toValue: 1, duration: ms, easing: Easing.linear, useNativeDriver: NATIVE }).start(() => {
+          if (!alive) return;
+          setWho(null);
+          next(18000 + Math.random() * 25000);
+        });
+      }, delay);
+    };
+    next(6000);
+    const hop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(step, { toValue: 1, duration: 170, easing: Easing.out(Easing.quad), useNativeDriver: NATIVE }),
+        Animated.timing(step, { toValue: 0, duration: 170, easing: Easing.in(Easing.quad), useNativeDriver: NATIVE }),
+      ]),
+    );
+    hop.start();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+      hop.stop();
+    };
+  }, [walk, step]);
+  if (!who) return null;
+  // Les emojis regardent vers la gauche : ils marchent de droite à gauche.
+  const x = walk.interpolate({ inputRange: [0, 1], outputRange: [width + 10, -40] });
+  const y = step.interpolate({ inputRange: [0, 1], outputRange: [0, -3] });
+  return (
+    <Animated.View pointerEvents="none" style={{ position: 'absolute', top: 3, left: 0, transform: [{ translateX: x }, { translateY: y }] }}>
+      <Icon name={who.img} size={24} />
+    </Animated.View>
+  );
+}
+
 const Awning = memo(function Awning({ width }: { width: number }) {
   const n = Math.max(9, Math.round(width / 36) | 1); // impair : rouge aux deux bords
   const w = width / n;
+  // Le volant de l'auvent ondule doucement au vent.
+  const [wind] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    const loop = Animated.loop(Animated.timing(wind, { toValue: 1, duration: 3200, easing: Easing.linear, useNativeDriver: NATIVE }));
+    loop.start();
+    return () => loop.stop();
+  }, [wind]);
+  const IN = [0, 0.25, 0.5, 0.75, 1];
+  const flap = [0, 1, 2, 3].map((k) => wind.interpolate({ inputRange: IN, outputRange: IN.map((t) => 2.2 * Math.sin(2 * Math.PI * (t + k / 4))) }));
   return (
-    <View style={{ backgroundColor: C.bg }}>
+    <View style={{ backgroundColor: C.bg, zIndex: 2 }}>
       <View style={{ height: 5, backgroundColor: C.redDark }} />
       <View style={{ flexDirection: 'row', height: 26 }}>
         {Array.from({ length: n }, (_, i) => (
-          <View
+          <Animated.View
             key={i}
-            style={{ width: w, height: 26, backgroundColor: i % 2 ? C.white : C.red, borderBottomLeftRadius: w / 2, borderBottomRightRadius: w / 2, boxShadow: '0px 3px 0px rgba(59,42,37,0.16)' }}
+            style={{ width: w, height: 26, backgroundColor: i % 2 ? C.white : C.red, borderBottomLeftRadius: w / 2, borderBottomRightRadius: w / 2, boxShadow: '0px 3px 0px rgba(59,42,37,0.16)', transform: [{ translateY: flap[i % 4] }] }}
           />
         ))}
       </View>
+      <Visitor width={width} />
     </View>
   );
 });
@@ -317,7 +376,7 @@ export function Game() {
     [toastAnim],
   );
   const onBossLost = useCallback(() => {
-    play('wrong');
+    play('flee');
     say('Le Glouton s’est enfui… Prépare de plus gros objets !', 'ogre');
   }, [say]);
   const { state: s, act, patch, reset } = useGame(setOffline, onBossLost);
@@ -347,9 +406,7 @@ export function Game() {
   const soundOn = s?.sound ?? true;
   const musicOn = s?.music ?? true;
   useEffect(() => setSoundEnabled(soundOn), [soundOn]);
-  useEffect(() => {
-    if (started.current) setMusic(musicOn);
-  }, [musicOn]);
+  useEffect(() => setMusic(musicOn), [musicOn]);
   useEffect(() => {
     const sub = AppState.addEventListener('change', (st) => pauseMusic(st !== 'active'));
     return () => sub.remove();
@@ -357,10 +414,10 @@ export function Game() {
   const firstTouch = useCallback(() => {
     if (!started.current) {
       started.current = true;
-      if (musicOn) setMusic(true);
+      startAudio();
     }
     return false;
-  }, [musicOn]);
+  }, []);
 
   // Rejoue les événements du moteur : sons, éclats, messages.
   const react = useCallback(
@@ -371,7 +428,8 @@ export function Game() {
           play('pop');
           fx.current?.burst(ev.cell, undefined, B.CHAINS[ev.chain].color);
         } else if (ev.t === 'merge') {
-          play(ev.lucky ? 'star' : 'merge');
+          playMerge(ev.combo);
+          if (ev.lucky || ev.tier >= 7) play('rare');
           buzz('light');
           fx.current?.burst(ev.cell, ev.lucky ? `Fusion en or ! +${fmt(ev.coins)}` : ev.combo >= 1 ? `Combo ×${ev.combo + 1}  +${fmt(ev.coins)}` : `+${fmt(ev.coins)}`, ev.lucky ? C.gold : B.CHAINS[ev.chain].color, true);
         } else if (ev.t === 'found') {
@@ -382,8 +440,7 @@ export function Game() {
           play('coin');
           fx.current?.burst(ev.cell, `+${fmt(ev.coins)}`, C.gold);
         } else if (ev.t === 'order') {
-          play('coin');
-          play('star');
+          play('order');
           buzz('success');
           say(`Commande livrée !  +${fmt(ev.coins)}`, 'coin');
         } else if (ev.t === 'levelup') {
@@ -393,34 +450,33 @@ export function Game() {
           play('buy');
           buzz('success');
         } else if (ev.t === 'reward') {
-          play('coin');
-          play('star');
+          play(ev.text === 'Coffre de palier' ? 'chest' : ev.text === 'Cadeau du jour' ? 'daily' : 'quest');
           say(ev.coins > 0 ? `${ev.text} !  +${fmt(ev.coins)}` : `${ev.text} !`, ev.text === 'Coffre de palier' ? 'wrapped_gift' : 'coin');
         } else if (ev.t === 'boost') {
-          play('buy');
+          play('boost');
           buzz('success');
         } else if (ev.t === 'bossStart') {
-          play('levelup');
+          play('boss');
         } else if (ev.t === 'hit') {
-          play('merge');
+          play('hit');
           buzz('light');
           setHitKey((k) => k + 1);
           fx.current?.burst(ev.cell, `-${fmt(ev.dmg)}`, C.red, true);
         } else if (ev.t === 'bossWin') {
-          play('levelup');
+          play('quest');
           buzz('success');
           setReward({ img: B.bossOf(ev.level).img as ImgName, title: 'Glouton repoussé !', text: `${B.bossOf(ev.level).name} (niv. ${ev.level}) a pris la fuite. Le suivant sera plus coriace.`, coins: ev.coins, stars: ev.stars });
         } else if (ev.t === 'move') {
-          play('tap');
+          play('drop');
         } else if (ev.t === 'full') {
-          play('wrong');
+          play('error');
           buzz('error');
           say("L'étal est plein : fusionne, livre ou vends.", 'package');
         } else if (ev.t === 'empty') {
-          play('wrong');
+          play('error');
           say('Ce stand se recharge…', 'hourglass_done');
         } else if (ev.t === 'poor') {
-          play('wrong');
+          play('poor');
           say('Pas assez de pièces.', 'coin');
         }
       }
@@ -467,6 +523,7 @@ export function Game() {
   );
   const onDragChange = useCallback((d: boolean) => {
     if (d) {
+      play('lift');
       measureRect(gensRef, sellRect);
       measureRect(topRef, topRect);
     }
@@ -482,6 +539,13 @@ export function Game() {
   );
   const onDeliver = useCallback((slot: number) => run((st, now) => E.deliver(st, slot, now)), [run]);
   const onSkip = useCallback((slot: number) => run((st) => E.skipOrder(st, slot)), [run]);
+
+  // Bruit de carnet qui s'ouvre / se ferme pour les panneaux.
+  const prevSheet = useRef<SheetName>(null);
+  useEffect(() => {
+    if (sheet !== prevSheet.current) play(sheet ? 'open' : 'close');
+    prevSheet.current = sheet;
+  }, [sheet]);
 
   const items = s?.items;
   useEffect(() => {

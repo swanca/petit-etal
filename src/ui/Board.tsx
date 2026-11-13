@@ -1,4 +1,4 @@
-// Plateau de fusion : une nappe vichy rouge et blanche sur laquelle on glisse les articles.
+// Plateau de fusion : un comptoir en bois aux cases encastrées sur lequel on glisse les articles.
 // Le glisser-déposer ne redessine jamais React pendant le geste : la tuile et la case survolée suivent le doigt
 // par Animated.setValue ; l'état du jeu n'est modifié qu'au lâcher.
 import { ComponentRef, forwardRef, memo, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -17,6 +17,21 @@ const LIFT = 0.28;
 /** Lâché à moins de 0,85 case d'un jumeau, l'article est aimanté vers lui. */
 const MAGNET = 0.85;
 
+// ---------- Vie : les articles se balancent doucement ----------
+
+// Une seule animation partagée pour tout le plateau (bon marché) ; chaque tuile la lit avec un décalage de phase.
+const sway = new Animated.Value(0);
+let swayOn = false;
+function startSway() {
+  if (swayOn) return;
+  swayOn = true;
+  Animated.loop(Animated.timing(sway, { toValue: 1, duration: 2600, easing: Easing.linear, useNativeDriver: NATIVE })).start();
+}
+const SWAY_IN = Array.from({ length: 9 }, (_, i) => i / 8);
+const wave = (phase: number, amp: number) => SWAY_IN.map((t) => amp * Math.sin(2 * Math.PI * (t + phase / 4)));
+const SWAY_Y = [0, 1, 2, 3].map((k) => sway.interpolate({ inputRange: SWAY_IN, outputRange: wave(k, -1.6) }));
+const SWAY_R = [0, 1, 2, 3].map((k) => sway.interpolate({ inputRange: SWAY_IN, outputRange: wave(k + 1, 2.2).map((d) => `${d}deg`) }));
+
 // ---------- Tuile ----------
 
 type TileMode = 'idle' | 'drag' | 'match' | 'dim';
@@ -30,6 +45,7 @@ const Tile = memo(function Tile({ item, cs, mode, selected, reg }: { item: Item;
   const def = CHAINS[item.chain];
 
   useEffect(() => {
+    startSway();
     reg.off.set(item.id, off);
     Animated.spring(pop, { toValue: 1, friction: 4, tension: 140, useNativeDriver: NATIVE }).start();
     return () => {
@@ -93,7 +109,9 @@ const Tile = memo(function Tile({ item, cs, mode, selected, reg }: { item: Item;
             boxShadow: mode === 'drag' ? '0px 8px 10px rgba(59,42,37,0.28)' : '0px 3px 0px rgba(59,42,37,0.22)',
           }}
         />
-        <Icon name={def.items[item.tier - 1].img as ImgName} size={cs * 0.66} />
+        <Animated.View style={mode === 'idle' ? { transform: [{ translateY: SWAY_Y[item.id % 4] }, { rotate: SWAY_R[item.id % 4] }] } : null}>
+          <Icon name={def.items[item.tier - 1].img as ImgName} size={cs * 0.66} />
+        </Animated.View>
         <View
           style={{
             position: 'absolute',
@@ -276,7 +294,31 @@ type Props = {
 };
 
 // Nappe vichy : bandes rouges translucides sur fond blanc.
-const CLOTH_BAND = 'rgba(226,61,50,0.16)';
+// Comptoir en planches claires et cases crème encastrées.
+const PLANK_A = '#E9BF8B';
+const PLANK_B = '#E2B37C';
+const PLANK_LINE = 'rgba(150,96,48,0.35)';
+const SLOT_A = '#FFF7EC';
+const SLOT_B = '#FDEFDC';
+const SLOT_SHADE = 'rgba(150,96,48,0.22)';
+
+/** Planches du comptoir : une par rangée, joints décalés comme un vrai plateau en bois. */
+const Planks = memo(function Planks({ cs }: { cs: number }) {
+  return (
+    <>
+      {Array.from({ length: ROWS }, (_, r) => {
+        const seam = ((r * 37) % 60) / 100 + 0.2;
+        return (
+          <View key={r} style={{ position: 'absolute', left: 0, right: 0, top: r * cs, height: cs, backgroundColor: r % 2 ? PLANK_B : PLANK_A, borderBottomWidth: r < ROWS - 1 ? 1.5 : 0, borderBottomColor: PLANK_LINE }}>
+            <View style={{ position: 'absolute', top: 0, bottom: 0, left: `${seam * 100}%`, width: 1.5, backgroundColor: PLANK_LINE }} />
+            <View style={{ position: 'absolute', left: 0, right: 0, top: cs * 0.3, height: 1, backgroundColor: 'rgba(150,96,48,0.10)' }} />
+            <View style={{ position: 'absolute', left: 0, right: 0, top: cs * 0.68, height: 1, backgroundColor: 'rgba(150,96,48,0.08)' }} />
+          </View>
+        );
+      })}
+    </>
+  );
+});
 
 export const Board = memo(
   forwardRef<BoardHandle, Props>(function Board(props, ref) {
@@ -435,19 +477,18 @@ export const Board = memo(
       for (let i = 0; i < COLS * ROWS; i++) {
         const p = cellXY(i, cs);
         if (openSet.has(i)) {
-          // Vichy fin : chaque case porte une bande verticale et une bande horizontale ; leur croisement est plus soutenu.
+          // Case ouverte : un creux crème dans le comptoir, légèrement ombré en haut (effet « encastré »).
+          const g = Math.max(2, Math.round(cs * 0.055));
+          const alt = (Math.floor(i / COLS) + (i % COLS)) % 2 === 1;
           out.push(
-            <View key={i} style={{ position: 'absolute', left: p.x, top: p.y, width: cs, height: cs, backgroundColor: C.white }}>
-              <View style={{ position: 'absolute', left: cs / 2, top: 0, width: cs / 2, height: cs, backgroundColor: CLOTH_BAND }} />
-              <View style={{ position: 'absolute', left: 0, top: cs / 2, width: cs, height: cs / 2, backgroundColor: CLOTH_BAND }} />
-            </View>,
+            <View key={i} style={{ position: 'absolute', left: p.x + g, top: p.y + g, width: cs - 2 * g, height: cs - 2 * g, borderRadius: cs * 0.2, backgroundColor: alt ? SLOT_B : SLOT_A, borderTopWidth: Math.max(2, cs * 0.05), borderTopColor: SLOT_SHADE, borderBottomWidth: 1.5, borderBottomColor: 'rgba(255,255,255,0.7)' }} />,
           );
           continue;
         }
-        // Case fermée : une caisse en bois posée sur la nappe.
+        // Case fermée : une caisse en bois posée sur le comptoir.
         const g = Math.max(2, Math.round(cs * 0.05));
         out.push(
-          <View key={i} style={{ position: 'absolute', left: p.x, top: p.y, width: cs, height: cs, backgroundColor: '#F6E7DA' }}>
+          <View key={i} style={{ position: 'absolute', left: p.x, top: p.y, width: cs, height: cs }}>
             <View
               style={{
                 position: 'absolute',
@@ -456,9 +497,10 @@ export const Board = memo(
                 right: g,
                 bottom: g,
                 borderRadius: cs * 0.14,
-                backgroundColor: C.wood,
+                backgroundColor: '#D9A86F',
                 borderWidth: 2,
-                borderColor: C.woodDark,
+                borderColor: '#B57B43',
+                opacity: nextCells.includes(i) ? 1 : 0.7,
                 borderBottomWidth: 4,
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -482,6 +524,7 @@ export const Board = memo(
         {...pan.panHandlers}
         style={[{ width: cs * COLS, height: cs * ROWS }, Platform.OS === 'web' ? ({ touchAction: 'none', userSelect: 'none', cursor: 'grab' } as object) : null]}>
         <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, borderRadius: cs * 0.2, overflow: 'hidden' }}>
+          <Planks cs={cs} />
           {cells}
         </View>
         <Animated.View
