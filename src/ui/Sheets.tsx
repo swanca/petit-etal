@@ -171,9 +171,9 @@ export function CollectionSheet({ s, onClose }: { s: State; onClose: () => void 
                 const seen = ok || E.isEver(s, c, i + 1);
                 const on = pick?.chain === c && pick.tier === i + 1;
                 return (
-                  <Pressable key={i} disabled={!ok} onPress={() => setPick({ chain: c, tier: i + 1 })} style={{ width: '16.66%', aspectRatio: 1, padding: 3 }}>
+                  <Pressable key={i} disabled={!ok} onPress={() => setPick({ chain: c, tier: i + 1 })} style={{ width: '14.28%', aspectRatio: 1, padding: 2.5 }}>
                     <View style={{ flex: 1, borderRadius: 12, backgroundColor: ok ? def.soft : C.line, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: on ? def.color : 'transparent' }}>
-                      {seen ? <Icon name={it.img as ImgName} size={34} style={{ opacity: ok ? 1 : 0.35 }} /> : <T style={{ fontFamily: F.title, fontSize: 18, color: C.greyDark }}>?</T>}
+                      {seen ? <Icon name={it.img as ImgName} size={30} style={{ opacity: ok ? 1 : 0.35 }} /> : <T style={{ fontFamily: F.title, fontSize: 18, color: C.greyDark }}>?</T>}
                       <T style={{ position: 'absolute', left: 4, top: 1, fontSize: 9, color: C.inkSoft }}>{i + 1}</T>
                     </View>
                   </Pressable>

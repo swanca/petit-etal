@@ -3,7 +3,7 @@
 import * as B from './balance';
 import type { BoostId, ChainId, MissionKind, TrophyDef, UpgradeId } from './balance';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2; // 2 : plateau 8×8 (au lieu de 6×6)
 
 // box : caisse à ouvrir (kind : index dans B.BOXES ; until : 0 = fermée, sinon fin de l'ouverture ; left : objets restants
 // quand l'étal était trop plein pour tout déverser). Une caisse a le palier 0 : elle ne fusionne ni ne sert de commande.
@@ -178,6 +178,12 @@ export function loadState(raw: string | null): State | null {
   if (!raw) return null;
   try {
     const s = JSON.parse(raw) as State;
+    // Version 1 (plateau 6×6) : chaque objet garde son rang d'ouverture, donc reste sur une case ouverte.
+    if (s && s.v === 1 && Array.isArray(s.items)) {
+      const old = B.cellOrder(B.OLD_COLS, B.OLD_ROWS);
+      s.items = s.items.map((it) => ({ ...it, cell: B.CELL_ORDER[Math.max(0, old.indexOf(it.cell))] }));
+      s.v = SAVE_VERSION;
+    }
     if (!s || s.v !== SAVE_VERSION || !Array.isArray(s.items) || !s.gens || !s.up || !s.life || !s.ever || !s.boosts || !s.boss || !Array.isArray(s.missions)) return null;
     for (const c of B.CHAIN_IDS) s.gens[c] ??= { level: 0, charges: B.GEN_BASE_CAP, prog: 0 };
     // Sauvegardes d'avant l'énergie : on part plein.

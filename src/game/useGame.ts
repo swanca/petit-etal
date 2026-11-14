@@ -2,9 +2,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
-import { advance, Ev, loadState, newGame, Offline, Res, SAVE_VERSION, State, track } from './engine';
+import { advance, Ev, loadState, newGame, Offline, Res, State, track } from './engine';
 
-export const SAVE_KEY = `etal.save.v${SAVE_VERSION}`;
+// Clé fixe : la version est inscrite dans la sauvegarde (loadState migre les anciennes).
+export const SAVE_KEY = 'etal.save.v1';
 const TICK_MS = 500;
 const SAVE_EVERY_MS = 3000;
 

@@ -37,6 +37,8 @@ export const CHAINS: Record<ChainId, ChainDef> = {
       { img: 'cupcake', name: 'Cupcake' },
       { img: 'shortcake', name: 'Fraisier' },
       { img: 'birthday_cake', name: 'Gâteau de fête' },
+      { img: 'pie', name: 'Tarte royale' },
+      { img: 'convenience_store', name: 'Boulangerie' },
     ],
   },
   jardin: {
@@ -60,6 +62,8 @@ export const CHAINS: Record<ChainId, ChainDef> = {
       { img: 'lotus', name: 'Lotus' },
       { img: 'hyacinth', name: 'Jacinthe' },
       { img: 'bouquet', name: 'Grand bouquet' },
+      { img: 'deciduous_tree', name: 'Arbre centenaire' },
+      { img: 'house_with_garden', name: 'Maison fleurie' },
     ],
   },
   primeur: {
@@ -83,6 +87,8 @@ export const CHAINS: Record<ChainId, ChainDef> = {
       { img: 'grapes', name: 'Raisin' },
       { img: 'pineapple', name: 'Ananas' },
       { img: 'watermelon', name: 'Pastèque' },
+      { img: 'mango', name: 'Mangue' },
+      { img: 'department_store', name: 'Halle du marché' },
     ],
   },
   douceurs: {
@@ -106,6 +112,8 @@ export const CHAINS: Record<ChainId, ChainDef> = {
       { img: 'ice_cream', name: 'Coupe glacée' },
       { img: 'moon_cake', name: 'Gâteau de lune' },
       { img: 'fondue', name: 'Fondue au chocolat' },
+      { img: 'honey_pot', name: 'Pot de miel' },
+      { img: 'circus_tent', name: 'Fête foraine' },
     ],
   },
   maree: {
@@ -129,6 +137,8 @@ export const CHAINS: Record<ChainId, ChainDef> = {
       { img: 'dolphin', name: 'Dauphin' },
       { img: 'shark', name: 'Requin' },
       { img: 'spouting_whale', name: 'Baleine' },
+      { img: 'seal', name: 'Phoque' },
+      { img: 'sailboat', name: 'Voilier' },
     ],
   },
   jouets: {
@@ -152,30 +162,36 @@ export const CHAINS: Record<ChainId, ChainDef> = {
       { img: 'bicycle', name: 'Vélo' },
       { img: 'racing_car', name: 'Bolide' },
       { img: 'rocket', name: 'Fusée' },
+      { img: 'flying_saucer', name: 'Soucoupe volante' },
+      { img: 'ferris_wheel', name: 'Grande roue' },
     ],
   },
 };
 
-export const MAX_TIER = 12;
+export const MAX_TIER = 14;
 
 // ---- Plateau ----
-export const COLS = 6;
-export const ROWS = 6;
+export const COLS = 8;
+export const ROWS = 8;
+/** Plateau d'avant l'agrandissement (sauvegardes version 1) : sert à replacer les objets. */
+export const OLD_COLS = 6;
+export const OLD_ROWS = 6;
 export const START_CELLS = 16; // carré 4×4 au centre
 export const CELLS_PER_UPGRADE = 2;
 
 // Ordre d'ouverture des cases : du centre vers les bords.
-export const CELL_ORDER: number[] = (() => {
+export function cellOrder(cols: number, rows: number): number[] {
   const cells: { i: number; d: number }[] = [];
-  for (let r = 0; r < ROWS; r++)
-    for (let c = 0; c < COLS; c++) {
-      const dx = Math.abs(c - (COLS - 1) / 2);
-      const dy = Math.abs(r - (ROWS - 1) / 2);
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      const dx = Math.abs(c - (cols - 1) / 2);
+      const dy = Math.abs(r - (rows - 1) / 2);
       // distance « carrée » d'abord (anneaux), puis les coins en dernier
-      cells.push({ i: r * COLS + c, d: Math.max(dx, dy) * 10 + dx + dy + r * 0.01 });
+      cells.push({ i: r * cols + c, d: Math.max(dx, dy) * 10 + dx + dy + r * 0.01 });
     }
   return cells.sort((a, b) => a.d - b.d).map((x) => x.i);
-})();
+}
+export const CELL_ORDER: number[] = cellOrder(COLS, ROWS);
 
 // ---- Valeurs ----
 /** Valeur de base d'un objet (sert aux commandes, à la vente, aux primes). */
@@ -239,7 +255,7 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
     name: "Agrandir l'étal",
     img: 'hammer_and_wrench',
     max: (COLS * ROWS - START_CELLS) / CELLS_PER_UPGRADE,
-    cost: (l) => Math.round(60 * Math.pow(1.6, l)),
+    cost: (l) => Math.round(60 * Math.pow(1.5, l)),
     desc: (l) => `${openCellCount(l)} → ${openCellCount(l + 1)} cases`,
   },
   income: {
@@ -409,20 +425,20 @@ export const TROPHIES: TrophyDef[] = [
   ...ladder('merges', 'sparkles', (n) => `${big(n)} fusions`, [25, 150, 600, 2500, 8000, 25000, 80000], 40),
   ...ladder('orders', 'shopping_bags', (n) => `${big(n)} commandes livrées`, [5, 30, 120, 400, 1200, 4000], 50),
   ...ladder('level', 'star', (n) => `Atteindre le niveau ${n}`, [3, 6, 10, 15, 20, 26, 33, 40], 60),
-  ...ladder('album', 'open_book', (n) => `${n} objets découverts`, [8, 16, 24, 36, 48, 60, 72], 80),
+  ...ladder('album', 'open_book', (n) => `${n} objets découverts`, [8, 16, 24, 36, 48, 60, 72, 84], 80),
   ...ladder('earned', 'money_bag', (n) => `Gagner ${big(n)} pièces`, [1000, 20000, 500000, 10000000, 250000000, 5000000000], 100),
   ...ladder('seasons', 'rosette', (n) => (n === 1 ? 'Lancer une nouvelle saison' : `${n} saisons lancées`), [1, 3, 6, 10], 2000),
   ...ladder('boss', 'crossed_swords', (n) => (n === 1 ? 'Repousser un Glouton' : `${n} Gloutons repoussés`), [1, 5, 15, 40, 100, 250], 150),
   ...CHAIN_IDS.flatMap((c) =>
-    [6, 9, 12].map((target, i) => ({
+    [6, 9, 12, 14].map((target, i) => ({
       id: `chain-${c}-${target}`,
       kind: 'chain' as TrophyKind,
       chain: c,
       target,
       name: `${CHAINS[c].name} : ${CHAINS[c].items[target - 1].name}`,
       img: CHAINS[c].items[target - 1].img,
-      floor: [300, 5000, 100000][i] * CHAINS[c].costMult,
-      minutes: [8, 15, 30][i],
+      floor: [300, 5000, 100000, 1500000][i] * CHAINS[c].costMult,
+      minutes: [8, 15, 30, 60][i],
     })),
   ),
 ];
