@@ -23,6 +23,8 @@ if (web) {
     installedNow = true;
     emit();
   });
+  // Le plein écran du navigateur ressemble à une appli installée : on réévalue quand il change.
+  document.addEventListener('fullscreenchange', emit);
 }
 
 const ua = () => (web ? window.navigator.userAgent : '');
@@ -31,7 +33,10 @@ const ua = () => (web ? window.navigator.userAgent : '');
 export function isInstalled(): boolean {
   if (!web) return true;
   const nav = window.navigator as Navigator & { standalone?: boolean };
-  return installedNow || window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches || nav.standalone === true;
+  // Attention : le bouton « Plein écran » (API Fullscreen) met aussi le navigateur en « display-mode: fullscreen ».
+  // Ce n'est une appli installée que si ce plein écran ne vient pas de l'API.
+  const fullscreenApp = window.matchMedia('(display-mode: fullscreen)').matches && !document.fullscreenElement;
+  return installedNow || window.matchMedia('(display-mode: standalone)').matches || fullscreenApp || nav.standalone === true;
 }
 
 export const isWeb = () => web;

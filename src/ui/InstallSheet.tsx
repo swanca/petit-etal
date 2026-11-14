@@ -85,6 +85,18 @@ function Card({ title, img, children }: { title: string; img: ImgName; children:
   );
 }
 
+/** Chrome dit « déjà installée » alors que l'icône n'est plus là : une ancienne copie est restée sur le téléphone. */
+function AlreadyInstalled() {
+  return (
+    <Card title="Chrome dit « déjà installée » ?" img="light_bulb">
+      <T style={{ fontSize: 13 }}>Une ancienne copie du jeu est restée sur le téléphone (supprimer l’icône ne la désinstalle pas).</T>
+      <Step n={1}>Ouvre les Paramètres du téléphone → Applications.</Step>
+      <Step n={2}>Cherche « Petit Étal » et touche « Désinstaller » (s’il y en a deux, désinstalle les deux).</Step>
+      <Step n={3}>Reviens ici et réinstalle : ta partie est gardée dans Chrome.</Step>
+    </Card>
+  );
+}
+
 function Body({ env, onDone }: { env: InstallEnv; onDone: () => void }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => setCopied(await copyLink());
@@ -109,6 +121,7 @@ function Body({ env, onDone }: { env: InstallEnv; onDone: () => void }) {
             }}
           />
         </Card>
+        <AlreadyInstalled />
       </>
     );
   }
@@ -148,6 +161,7 @@ function Body({ env, onDone }: { env: InstallEnv; onDone: () => void }) {
           <Step n={3}>Confirme : le jeu s’ouvre ensuite en plein écran depuis son icône.</Step>
           <T style={{ fontSize: 12, color: C.inkSoft }}>Sur Samsung Internet : menu ☰, puis « Ajouter la page à » → « Écran d’accueil ». Sur Firefox : menu ⋮, puis « Installer ».</T>
         </Card>
+        <AlreadyInstalled />
       </>
     );
   }
