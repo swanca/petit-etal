@@ -278,6 +278,7 @@ export function OfflineModal({ data, capSec, onClose }: { data: Offline; capSec:
 
 export function LevelUpModal({ data, onClose }: { data: LevelUp; onClose: () => void }) {
   const def = data.unlocked ? B.CHAINS[data.unlocked] : null;
+  const box = B.BOXES[B.levelBox(data.level)];
   return (
     <Modal>
       <Icon name="party_popper" size={64} />
@@ -287,6 +288,10 @@ export function LevelUpModal({ data, onClose }: { data: LevelUp; onClose: () => 
         <T style={{ fontFamily: F.title, fontSize: 22 }}>+{fmt(data.coins)}</T>
         <Icon name="high_voltage" size={24} style={{ marginLeft: 8 }} />
         <T style={{ fontFamily: F.title, fontSize: 18 }}>Énergie pleine</T>
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFF1DC', borderRadius: 14, paddingVertical: 6, paddingHorizontal: 12 }}>
+        <Icon name={box.img as ImgName} size={30} />
+        <T style={{ fontFamily: F.semi, fontSize: 14, flexShrink: 1 }}>+ {box.name} sur l&apos;étal : touche-{box.fem ? 'la' : 'le'} pour l&apos;ouvrir</T>
       </View>
       {def ? (
         <View style={{ alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: def.soft, borderRadius: 18, borderWidth: 2, borderColor: def.color, padding: 10 }}>
@@ -450,7 +455,7 @@ export function BossIntroModal({ s, onFight, onCancel }: { s: State; onFight: ()
   const lvl = s.boss.level;
   const def = B.bossOf(lvl);
   // Force disponible sur le plateau : aide à décider sans rien promettre.
-  const power = s.items.reduce((a, it) => a + B.bossDamage(it.tier, s.up.power), 0);
+  const power = s.items.reduce((a, it) => (it.box ? a : a + B.bossDamage(it.tier, s.up.power)), 0);
   const hp = B.bossHp(lvl);
   return (
     <Modal>

@@ -3,7 +3,7 @@
 // par Animated.setValue ; l'état du jeu n'est modifié qu'au lâcher.
 import { ComponentRef, forwardRef, memo, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, PanResponder, Platform, View } from 'react-native';
-import { CHAINS, COLS, ROWS } from '../game/balance';
+import { BOXES, CHAINS, COLS, ROWS } from '../game/balance';
 import type { Item } from '../game/engine';
 import { ImgName } from './images';
 import { C, F, Icon, NATIVE, T } from './theme';
@@ -31,6 +31,67 @@ const SWAY_IN = Array.from({ length: 9 }, (_, i) => i / 8);
 const wave = (phase: number, amp: number) => SWAY_IN.map((t) => amp * Math.sin(2 * Math.PI * (t + phase / 4)));
 const SWAY_Y = [0, 1, 2, 3].map((k) => sway.interpolate({ inputRange: SWAY_IN, outputRange: wave(k, -1.6) }));
 const SWAY_R = [0, 1, 2, 3].map((k) => sway.interpolate({ inputRange: SWAY_IN, outputRange: wave(k + 1, 2.2).map((d) => `${d}deg`) }));
+
+// ---------- Caisse à ouvrir ----------
+
+const clockOf = (ms: number) => {
+  const sec = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  return h > 0 ? `${h} h ${String(m).padStart(2, '0')}` : `${m}:${String(sec % 60).padStart(2, '0')}`;
+};
+
+/** Visage d'une caisse : fermée (« Ouvrir »), en cours (compte à rebours) ou prête (elle sautille). */
+function BoxFace({ box, cs }: { box: NonNullable<Item['box']>; cs: number }) {
+  const def = BOXES[box.kind];
+  const [now, setNow] = useState(() => Date.now());
+  const [hop] = useState(() => new Animated.Value(0));
+  const ready = box.until > 0 && now >= box.until;
+  const opening = box.until > 0 && !ready;
+  useEffect(() => {
+    if (!opening) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [opening]);
+  useEffect(() => {
+    if (!ready) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(hop, { toValue: 1, duration: 220, easing: Easing.out(Easing.quad), useNativeDriver: NATIVE }),
+        Animated.timing(hop, { toValue: 0, duration: 260, easing: Easing.bounce, useNativeDriver: NATIVE }),
+        Animated.delay(900),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [ready, hop]);
+  const label = ready ? (def.fem ? 'Prête !' : 'Prêt !') : opening ? clockOf(box.until - now) : 'Ouvrir';
+  return (
+    <>
+      <Animated.View style={{ transform: [{ translateY: hop.interpolate({ inputRange: [0, 1], outputRange: [0, -cs * 0.12] }) }, { rotate: hop.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-6deg'] }) }] }}>
+        <Icon name={def.img as ImgName} size={cs * 0.6} style={{ opacity: opening ? 0.75 : 1 }} />
+      </Animated.View>
+      <View
+        style={{
+          position: 'absolute',
+          bottom: cs * 0.02,
+          paddingHorizontal: 4,
+          minWidth: cs * 0.6,
+          height: cs * 0.27,
+          borderRadius: cs * 0.135,
+          backgroundColor: ready ? C.green : opening ? C.ink : def.color,
+          borderWidth: 1.5,
+          borderColor: C.white,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+        <T style={{ fontFamily: F.title, color: C.white, fontSize: cs * 0.17, lineHeight: cs * 0.22 }} numberOfLines={1}>
+          {label}
+        </T>
+      </View>
+    </>
+  );
+}
 
 // ---------- Tuile ----------
 
@@ -83,7 +144,8 @@ const Tile = memo(function Tile({ item, cs, mode, selected, reg }: { item: Item;
   }, [mode, lift, glow]);
 
   const pad = Math.round(cs * 0.07);
-  const ring = mode === 'match' ? C.green : selected || mode === 'drag' ? def.color : C.white;
+  const box = item.box;
+  const ring = box ? BOXES[box.kind].color : mode === 'match' ? C.green : selected || mode === 'drag' ? def.color : C.white;
   return (
     <Animated.View
       pointerEvents="none"
@@ -103,16 +165,21 @@ const Tile = memo(function Tile({ item, cs, mode, selected, reg }: { item: Item;
             right: pad,
             bottom: pad,
             borderRadius: cs * 0.24,
-            backgroundColor: mode === 'match' ? '#DDF7E6' : def.soft,
+            backgroundColor: box ? '#FFF1DC' : mode === 'match' ? '#DDF7E6' : def.soft,
+            borderStyle: box && box.until === 0 ? 'dashed' : 'solid',
             borderWidth: mode === 'match' || selected || mode === 'drag' ? 3 : 2,
             borderColor: ring,
             boxShadow: mode === 'drag' ? '0px 8px 10px rgba(59,42,37,0.28)' : '0px 3px 0px rgba(59,42,37,0.22)',
           }}
         />
-        <Animated.View style={mode === 'idle' ? { transform: [{ translateY: SWAY_Y[item.id % 4] }, { rotate: SWAY_R[item.id % 4] }] } : null}>
-          <Icon name={def.items[item.tier - 1].img as ImgName} size={cs * 0.66} />
-        </Animated.View>
-        <View
+        {box ? (
+          <BoxFace box={box} cs={cs} />
+        ) : (
+          <Animated.View style={mode === 'idle' ? { transform: [{ translateY: SWAY_Y[item.id % 4] }, { rotate: SWAY_R[item.id % 4] }] } : null}>
+            <Icon name={def.items[item.tier - 1].img as ImgName} size={cs * 0.66} />
+          </Animated.View>
+        )}
+        {box ? null : <View
           style={{
             position: 'absolute',
             right: pad - 2,
@@ -127,7 +194,7 @@ const Tile = memo(function Tile({ item, cs, mode, selected, reg }: { item: Item;
             borderColor: C.white,
           }}>
           <T style={{ fontFamily: F.title, color: C.white, fontSize: cs * 0.19, lineHeight: cs * 0.24 }}>{item.tier}</T>
-        </View>
+        </View>}
       </Animated.View>
     </Animated.View>
   );
@@ -385,7 +452,7 @@ export const Board = memo(
         let bestDist = size * MAGNET;
         if (me)
           for (const it of list) {
-            if (it.id === me.id || it.chain !== me.chain || it.tier !== me.tier) continue;
+            if (it.id === me.id || me.box || it.box || it.chain !== me.chain || it.tier !== me.tier) continue;
             const p = cellXY(it.cell, size);
             const dist = Math.hypot(p.x + size / 2 - cx, p.y + size / 2 - cy);
             if (dist < bestDist) {
@@ -540,7 +607,7 @@ export const Board = memo(
           style={{ position: 'absolute', left: 3, top: 3, width: cs - 6, height: cs - 6, borderRadius: cs * 0.24, borderWidth: 3, borderColor: C.green, backgroundColor: 'rgba(52,179,106,0.28)', opacity: hovOn, transform: hov.getTranslateTransform() }}
         />
         {items.map((it) => {
-          const mode: TileMode = !dragged ? 'idle' : it.id === dragged.id ? 'drag' : it.chain === dragged.chain && it.tier === dragged.tier ? 'match' : 'dim';
+          const mode: TileMode = !dragged ? 'idle' : it.id === dragged.id ? 'drag' : !it.box && !dragged.box && it.chain === dragged.chain && it.tier === dragged.tier ? 'match' : 'dim';
           return <Tile key={it.id} item={it} cs={cs} mode={mode} selected={selected === it.id} reg={reg} />;
         })}
         {hintFrom >= 0 && dragId === null ? <HintHand from={hintFrom} to={hintTo} cs={cs} /> : null}

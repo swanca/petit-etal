@@ -435,3 +435,31 @@ export const LUCKY_MERGE_CHANCE = 0.05; // « fusion en or » : l'objet gagne de
 /** Clients qui passent commande (visages). */
 export const FACES: string[] = ['cat', 'dog_face', 'rabbit_face', 'pig_face', 'cow_face', 'frog', 'owl', 'chicken', 'hedgehog', 'chipmunk', 'duck', 'robot'];
 export const IDLE_HINT_MS = 9000; // sans action pendant 9 s : la main montre une fusion possible
+
+// ---- Caisses à ouvrir (attente, puis récompense) ----
+// Une caisse arrive sur l'étal (niveau gagné, commande, coffre de missions) ; on la touche pour lancer
+// l'ouverture, une seule à la fois. Quand le temps est écoulé, elle déverse ses objets sur l'étal.
+export type BoxDef = { name: string; fem: boolean; img: string; ms: number; items: number; lo: number; hi: number; energy: number; color: string };
+export const BOXES: BoxDef[] = [
+  { name: 'Cagette', fem: true, img: 'package', ms: 3 * 60e3, items: 3, lo: 1, hi: 2, energy: 0, color: '#C98A4B' },
+  { name: 'Panier garni', fem: false, img: 'basket', ms: 20 * 60e3, items: 5, lo: 2, hi: 3, energy: 10, color: '#3FA34D' },
+  { name: 'Coffret doré', fem: false, img: 'wrapped_gift', ms: 2 * 3600e3, items: 7, lo: 3, hi: 5, energy: 25, color: '#E0A800' },
+];
+/** Bonus de palier des objets d'une caisse : +1 tous les 8 niveaux. */
+/** Accords : « prête / prêt », « touche-la / touche-le »… */
+export const boxWord = (d: BoxDef, fem: string, masc: string) => (d.fem ? fem : masc);
+export const boxTierBonus = (level: number) => Math.min(4, Math.floor(level / 8));
+/** Caisse donnée à chaque niveau gagné : coffret doré tous les 5 niveaux, panier à partir du niveau 5. */
+export const levelBox = (level: number) => (level % 5 === 0 ? 2 : level >= 5 ? 1 : 0);
+export const ORDER_BOX_CHANCE = 0.15; // une commande livrée laisse parfois une cagette
+/** Ouvrir tout de suite contre des pièces : prix par minute restante, qui suit le niveau. */
+export const boxSkipCost = (level: number, msLeft: number) => Math.max(5, Math.round(Math.ceil(msLeft / 60e3) * 6 * Math.pow(1.35, level - 1)));
+/** Ouvertures immédiates par jour avec une pub (ou offertes, sans régie de pub). */
+export const BOX_SKIPS_AD_PER_DAY = 6;
+export const BOX_SKIPS_FREE_PER_DAY = 1;
+
+// ---- Clients pressés ----
+export const RUSH_LEVEL = 3;
+export const RUSH_CHANCE = 0.22;
+export const RUSH_MS = 8 * 60e3;
+export const RUSH_COIN_MULT = 1.8; // et un panier garni en prime

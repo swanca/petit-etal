@@ -11,10 +11,11 @@ import { Board, BoardHandle } from './Board';
 import { ImgName } from './images';
 import { initAds } from './ads';
 import { InstallBanner, InstallSheet } from './InstallSheet';
+import { BoxSheet } from './BoxSheet';
 import { ShopSheet } from './ShopSheet';
 import { BossIntroModal, CollectionSheet, DailyModal, LevelUpModal, MissionsSheet, OfflineModal, RewardModal, SettingsSheet, TrophiesSheet, UpgradesSheet } from './Sheets';
 import { buzz, pauseMusic, play, playMerge, setMusic, setSoundEnabled, startAudio } from './sfx';
-import { Btn, C, F, fmt, fmtClock, fmtRate, Icon, NATIVE, T } from './theme';
+import { Btn, C, F, fmt, fmtClock, fmtDuration, fmtRate, Icon, NATIVE, T } from './theme';
 
 const MAX_W = 460;
 type SheetName = 'upgrades' | 'collection' | 'settings' | 'missions' | 'trophies' | 'install' | 'shop' | null;
@@ -321,8 +322,9 @@ function OrderCard({ slot, order, s, now, pulse, onDeliver, onSkip }: { slot: nu
   });
   const canSkip = s.ordersDone >= B.FIRST_ORDERS.length;
   const size = order.needs.length > 2 ? 28 : 34;
+  const rushLeft = order.rush ? Math.max(0, order.rush - now) : 0;
   return (
-    <View style={[base, used ? { borderColor: C.green } : null]}>
+    <View style={[base, order.rush ? { borderColor: '#E8612D', backgroundColor: '#FFF1E8' } : null, used ? { borderColor: C.green } : null]}>
       <View style={{ flexDirection: 'row', gap: 2, justifyContent: 'center' }}>
         {order.needs.map((n, i) => (
           <View key={i} style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: B.CHAINS[n.chain].soft }}>
@@ -337,6 +339,7 @@ function OrderCard({ slot, order, s, now, pulse, onDeliver, onSkip }: { slot: nu
         <T style={{ fontFamily: F.semi, fontSize: 12 }}>{fmt(E.orderCoins(s, order, now))}</T>
         <Icon name="star" size={13} style={{ marginLeft: 3 }} />
         <T style={{ fontFamily: F.semi, fontSize: 12 }}>{order.stars}</T>
+        {order.rush ? <Icon name={B.BOXES[1].img as ImgName} size={14} style={{ marginLeft: 2 }} /> : null}
       </View>
       <View style={{ alignSelf: 'stretch' }}>
         {pulse && used ? <Pulse radius={16} /> : null}
@@ -345,6 +348,12 @@ function OrderCard({ slot, order, s, now, pulse, onDeliver, onSkip }: { slot: nu
       <View pointerEvents="none" style={{ position: 'absolute', left: -6, top: -8, width: 26, height: 26, borderRadius: 13, backgroundColor: C.card, borderWidth: 2, borderColor: used ? C.green : C.line, alignItems: 'center', justifyContent: 'center' }}>
         <Icon name={B.FACES[(order.face ?? 0) % B.FACES.length] as ImgName} size={18} />
       </View>
+      {order.rush ? (
+        <View pointerEvents="none" style={{ position: 'absolute', top: -9, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: rushLeft < 60e3 ? C.red : '#E8612D', borderRadius: 9, paddingHorizontal: 6, height: 18, borderWidth: 2, borderColor: C.white }}>
+          <Icon name="stopwatch" size={11} />
+          <T style={{ fontFamily: F.title, fontSize: 10, lineHeight: 13, color: C.white }}>{fmtClock(rushLeft)}</T>
+        </View>
+      ) : null}
       {canSkip && !used ? (
         <Pressable onPress={() => onSkip(slot)} hitSlop={6} style={{ position: 'absolute', right: -5, top: -5, width: 20, height: 20, borderRadius: 10, backgroundColor: C.grey, alignItems: 'center', justifyContent: 'center' }}>
           <T style={{ fontFamily: F.title, fontSize: 11, lineHeight: 14, color: C.white }}>✕</T>
@@ -501,6 +510,7 @@ export function Game() {
   }, [say]);
   const { state: s, act, patch, reset } = useGame(setOffline, onBossLost);
   const [sheet, setSheet] = useState<SheetName>(null);
+  const [boxId, setBoxId] = useState<number | null>(null);
   const [levelUp, setLevelUp] = useState<LevelUp | null>(null);
   const [reward, setReward] = useState<Reward | null>(null);
   const [bossIntro, setBossIntro] = useState(false);
@@ -666,6 +676,26 @@ export function Game() {
         } else if (ev.t === 'energy') {
           play('boost');
           say(`${ev.text} : +${ev.amount} énergie`, 'high_voltage');
+        } else if (ev.t === 'box') {
+          const d = B.BOXES[ev.kind];
+          play('pop');
+          fx.current?.burst(ev.cell, d.name, d.color, true);
+          say(`${d.name} ${B.boxWord(d, 'reçue', 'reçu')} ! Touche-${B.boxWord(d, 'la', 'le')} pour l’ouvrir.`, d.img as ImgName);
+        } else if (ev.t === 'boxStart') {
+          const d = B.BOXES[ev.kind];
+          play('click');
+          say(`${d.name} : ouverture dans ${fmtDuration(ev.ms / 1000)}.`, 'hourglass_done');
+        } else if (ev.t === 'boxBusy') {
+          play('error');
+          say('Une caisse s’ouvre déjà : une seule à la fois.', 'hourglass_done');
+        } else if (ev.t === 'boxWait') {
+          setBoxId(ev.id);
+        } else if (ev.t === 'boxOpen') {
+          const d = B.BOXES[ev.kind];
+          play('chest');
+          buzz('success');
+          fx.current?.burst(ev.cell, `${d.name} ${B.boxWord(d, 'ouverte', 'ouvert')} !`, d.color, true);
+          if (ev.energy) say(`${d.name} : +${ev.n} objets et +${ev.energy} énergie`, d.img as ImgName);
         } else if (ev.t === 'empty') {
           play('error');
           say('Il manque des objets pour cette commande.', 'hourglass_done');
@@ -697,7 +727,7 @@ export function Game() {
     (id: number) => {
       const list = itemsRef.current;
       const it = list.find((x) => x.id === id);
-      const twin = it && list.find((x) => x.id !== id && x.chain === it.chain && x.tier === it.tier);
+      const twin = it && !it.box && list.find((x) => x.id !== id && !x.box && x.chain === it.chain && x.tier === it.tier);
       return it && twin && it.tier < B.MAX_TIER ? onDrop(id, twin.cell) : false;
     },
     [onDrop],
@@ -731,6 +761,18 @@ export function Game() {
     },
     [act, react],
   );
+  const onSelect = useCallback(
+    (id: number | null) => {
+      const it = id !== null ? itemsRef.current.find((x) => x.id === id) : undefined;
+      if (it?.box) {
+        setSelected(null);
+        run((st, t) => E.tapBox(st, it.id, t));
+        return;
+      }
+      setSelected(id);
+    },
+    [run],
+  );
   const onDeliver = useCallback((slot: number) => run((st, now) => E.deliver(st, slot, now)), [run]);
   const onSkip = useCallback((slot: number) => run((st) => E.skipOrder(st, slot)), [run]);
 
@@ -758,7 +800,8 @@ export function Game() {
   let hintTo = -1;
   if (items && (tuto === E.TUTO.merge || merges < 3 || idle)) {
     for (const a of items) {
-      const b = items.find((x) => x.id !== a.id && x.chain === a.chain && x.tier === a.tier);
+      if (a.box) continue;
+      const b = items.find((x) => x.id !== a.id && !x.box && x.chain === a.chain && x.tier === a.tier);
       if (b && a.tier < B.MAX_TIER) {
         hintFrom = a.cell;
         hintTo = b.cell;
@@ -766,6 +809,21 @@ export function Game() {
       }
     }
   }
+
+  const readyKey = items ? items.filter((x) => x.box && x.box.until > 0 && (s?.lastSeen ?? 0) >= x.box.until).map((x) => x.id).join(',') : '';
+  const prevReady = useRef<string | null>(null);
+  useEffect(() => {
+    const before = prevReady.current;
+    prevReady.current = readyKey;
+    if (before === null || !readyKey) return;
+    const fresh = readyKey.split(',').filter((k) => !before.split(',').includes(k));
+    const it = fresh.length ? itemsRef.current.find((x) => String(x.id) === fresh[0]) : undefined;
+    if (it?.box) {
+      play('found');
+      const d = B.BOXES[it.box.kind];
+      say(`${d.name} ${B.boxWord(d, 'prête', 'prêt')} : touche-${B.boxWord(d, 'la', 'le')} !`, d.img as ImgName);
+    }
+  }, [readyKey, say]);
 
   if (!s || !items) return <View style={{ flex: 1, backgroundColor: C.bg }} />;
 
@@ -857,7 +915,7 @@ export function Game() {
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <View style={{ padding: 4, borderRadius: 22, backgroundColor: C.red, borderBottomWidth: 6, borderColor: C.redDark, boxShadow: '0px 6px 14px rgba(181,42,34,0.25)' }}>
             <View style={{ padding: 3, borderRadius: 17, backgroundColor: C.white }}>
-            <Board ref={fx} items={items} open={open} nextCells={nextCells} cs={cs} selected={selected} hintFrom={hintFrom} hintTo={hintTo} onDrop={onDrop} onThrow={onThrow} onSelect={setSelected} onAgain={onAgain} onDragChange={onDragChange} />
+            <Board ref={fx} items={items} open={open} nextCells={nextCells} cs={cs} selected={selected} hintFrom={hintFrom} hintTo={hintTo} onDrop={onDrop} onThrow={onThrow} onSelect={onSelect} onAgain={onAgain} onDragChange={onDragChange} />
             </View>
           </View>
         </View>
@@ -927,6 +985,19 @@ export function Game() {
         {sheet === 'trophies' ? <TrophiesSheet s={s} onClose={() => setSheet(null)} onClaim={(id) => run((st) => E.claimTrophy(st, id))} /> : null}
         {sheet === 'collection' ? <CollectionSheet s={s} onClose={() => setSheet(null)} /> : null}
         {sheet === 'install' ? <InstallSheet onClose={() => setSheet(null)} /> : null}
+        {boxId !== null ? (
+          <BoxSheet
+            s={s}
+            now={now}
+            id={boxId}
+            onClose={() => setBoxId(null)}
+            onSkip={(how, perDay) => {
+              const id = boxId;
+              setBoxId(null);
+              run((st, t) => E.skipBox(st, id, t, how, perDay));
+            }}
+          />
+        ) : null}
         {sheet === 'shop' ? (
           <ShopSheet s={s} now={now} onClose={() => setSheet(null)} onAd={(perDay) => run((st, t) => E.refillByAd(st, t, perDay))} onBuy={(kind) => run((st, t) => E.buyEnergy(st, t, kind))} />
         ) : null}
