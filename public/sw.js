@@ -1,6 +1,6 @@
 // Service worker de Petit Étal : rend le jeu installable et jouable hors connexion.
 // Réseau d'abord (les mises à jour arrivent dès qu'on est en ligne), cache en secours.
-const CACHE = 'etal-v2';
+const CACHE = 'etal-v3';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {
